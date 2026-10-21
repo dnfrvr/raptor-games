@@ -1,0 +1,17 @@
+{
+  "name": "roland-gamos",
+  "version": "1.0.0",
+  "description": "Roland Gamos en ligne à deux, featurings vérifiés en direct avec l'API Deezer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "mock": "DEEZER_MOCK=1 node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  },
+  "license": "MIT"
+}
