@@ -226,7 +226,8 @@ class Room {
       this.accept(a, track, false);
     } else {
       r.lastError = { ...attempt, why: failed ? 'api' : 'notfound' };
-      this.startClock();
+      // Proposition ratée : le chrono repart du début pour laisser le temps d'en tenter une autre.
+      this.resetClock();
       this.broadcast();
     }
   }
@@ -243,16 +244,26 @@ class Room {
     this.emitAll('link', { track, artist: a });
   }
 
-  // Deezer ne trouve rien ? Le joueur peut demander à l'adversaire de valider à la main (une fois par tour).
+  // Deezer ne trouve rien ? Le joueur peut demander à l'adversaire de valider à la main.
   appeal(token) {
     const i = this.idx(token);
     const r = this.round;
-    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal || r.appealUsed) return;
-    if (!r.lastError || r.lastError.why === 'used') return;
+    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal) return;
+    if (!r.lastError || !['notfound', 'api'].includes(r.lastError.why)) return;
     r.appeal = { artist: r.lastError.artist, song: r.lastError.song };
-    r.appealUsed = true;
     this.pauseClock();
     this.broadcast();
+  }
+
+  // L'adversaire peut aussi valider de lui-même un feat que Deezer n'a pas trouvé, sans attendre qu'on le lui demande.
+  grant(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    if (this.phase !== 'playing' || i === r.turn || r.checking || r.appeal) return;
+    if (!r.lastError || !['notfound', 'api', 'refused'].includes(r.lastError.why)) return;
+    const { artist, song } = r.lastError;
+    if (this.usedArtist(artist)) return;
+    this.accept(artist, { id: null, title: song || 'Validé par l’adversaire', artists: [this.current().name, artist.name], preview: null, link: null, cover: null }, true);
   }
 
   judge(token, ok) {
@@ -265,7 +276,7 @@ class Room {
       this.accept(artist, { id: null, title: song || 'Validé par l’adversaire', artists: [this.current().name, artist.name], preview: null, link: null, cover: null }, true);
     } else {
       r.lastError = { artist, song, why: 'refused' };
-      this.startClock();
+      this.resetClock();
       this.broadcast();
     }
   }

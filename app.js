@@ -22,6 +22,7 @@
   let lastRoundId = null;
   let lastErrKey = '';
   let lastTurnKey = '';
+  let lastMask = null;
 
   const socket = io({ transports: ['websocket', 'polling'] });
 
@@ -211,6 +212,12 @@
     const last = r.chain[r.chain.length - 1];
     const cur = last ? last.artist : null;
     const newLink = r.chain.length !== lastChainLen;
+    // Anti-triche : pendant la manche, on masque les autres artistes présents sur les sons (révélés à la fin).
+    const mask = S.phase === 'playing';
+    const redraw = newLink || mask !== lastMask;
+    lastMask = mask;
+    const known = new Set(r.chain.map((l) => nrm(l.artist.name)));
+    const others = (t) => (mask && t ? (t.artists || []).filter((n) => !known.has(nrm(n))) : []);
     const myTurn = playing && r.turn === S.me;
     const turnName = S.players[r.turn]?.name || '';
     const busy = !!r.checking || !!r.appeal;
@@ -221,19 +228,21 @@
         ? `<span class="av q" aria-hidden="true">?</span><span class="nm q">Artiste de départ</span>`
         : `${avatar(cur)}<span class="nm">${esc(cur.name)}</span>`;
       $('#current').classList.remove('pop'); void $('#current').offsetWidth; $('#current').classList.add('pop');
+      // Nouvelle saisie seulement quand la chaîne avance : en cas d'erreur, le joueur garde ce qu'il a tapé.
+      $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null;
+    }
+    if (redraw) {
       const proof = $('#proof');
       if (last && last.track) {
         proof.hidden = false;
         proof.innerHTML = last.byAppeal
           ? `Validé par ${esc(S.players[1 - last.by]?.name || 'l’adversaire')}${last.track.title && last.track.title !== 'Validé par l’adversaire' ? ` : « ${esc(last.track.title)} »` : ''}`
-          : `Prouvé par ${trackInline(last.track)}`;
+          : `Prouvé par ${trackInline(last.track, others(last.track))}`;
         bindTracks();
       } else if (last) {
         proof.hidden = false;
         proof.textContent = last.random ? `Tiré au hasard pour ${S.players[last.by]?.name || ''}` : `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
       } else proof.hidden = true;
-      // Nouvelle saisie seulement quand la chaîne avance : en cas d'erreur, le joueur garde ce qu'il a tapé.
-      $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null;
     }
 
     // --- À qui de jouer ---
@@ -281,10 +290,13 @@
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
       else if (r.lastError) txt = r.lastError.why === 'used'
         ? `${esc(turnName)} a proposé <b>${esc(r.lastError.artist.name)}</b>, déjà cité. <span class="dots">Il cherche encore</span>`
-        : `${esc(turnName)} a raté avec <b>${esc(r.lastError.artist.name)}</b>. <span class="dots">Il cherche encore</span>`;
+        : r.lastError.why === 'random' ? `<span class="dots">${esc(turnName)} choisit l’artiste de départ</span>`
+        : `Deezer ne trouve pas de son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}. Si ce feat existe, tu peux le valider.`;
+      const grantable = !r.checking && !r.appeal && r.lastError && ['notfound', 'api', 'refused'].includes(r.lastError.why);
       const p = S.players[r.turn];
       if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`;
-      $('#watch').innerHTML = txt;
+      $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '');
+      if (grantable) armTwoTap($('#grantBtn'), 'Valider ce feat', 'Sûr ?', () => socket.emit('grant'));
     }
 
     // --- Arbitrage ---
@@ -295,13 +307,13 @@
     if (judging) $('#judgeText').innerHTML = `${esc(cur.name)} <em>×</em> ${esc(r.appeal.artist.name)}${r.appeal.song ? `<span class="small">« ${esc(r.appeal.song)} »</span>` : ''}`;
 
     // --- Chaîne, la plus récente en haut ---
-    if (newLink) {
+    if (redraw) {
       const n = Math.max(0, r.chain.length - 1);
       $('#chainTitle').textContent = r.chain.length ? `La chaîne, ${plural(n, 'feat')}` : 'La chaîne';
       $('#chain').innerHTML = r.chain.length ? r.chain.map((l, i) => {
         const who = esc(S.players[l.by]?.name || '');
         const detail = i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`;
-        return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal) : ''}</li>`;
+        return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
       bindTracks();
       lastChainLen = r.chain.length;
@@ -342,12 +354,12 @@
     const msg = {
       used: `<b>${esc(e.artist.name)}</b> est déjà dans la chaîne. Trouve quelqu'un d'autre.`,
       random: 'Le tirage n’a pas marché : Deezer ne répond pas. Réessaie ou tape un artiste.',
-      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Vérifie l'orthographe ou ajoute le titre du son.`,
+      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande à ${esc(opp)} de le valider. Sinon, propose quelqu'un d'autre.`,
       refused: `${esc(opp)} a refusé <b>${esc(e.artist.name)}</b>. Propose un autre artiste.`,
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande à ${esc(opp)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
-    const canAppeal = !r.appealUsed && (e.why === 'notfound' || e.why === 'api');
-    fb.innerHTML = `<p>${msg}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Faire valider</button>` : '');
+    const canAppeal = e.why === 'notfound' || e.why === 'api';
+    fb.innerHTML = `<p>${msg}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander à ${esc(opp)}</button>` : '');
     if (canAppeal) $('#appealBtn').onclick = () => socket.emit('appeal');
   }
 
@@ -391,15 +403,30 @@
   }
 
   // ================= PISTES / AUDIO =================
-  function trackInline(t) {
-    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">▶</button>` : '';
-    return `<span class="ti">« ${esc(t.title)} »</span>${btn}`;
+  // Remplace les noms à cacher par un bloc flouté. Le vrai nom n'est jamais mis dans la page, donc impossible à lire en trichant.
+  const nrm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const hid = (n) => `<span class="hid" aria-label="artiste masqué">${'x'.repeat(Math.min(Math.max(n, 4), 12))}</span>`;
+  function masked(text, hide) {
+    text = String(text || '');
+    if (!hide.length) return esc(text);
+    const re = new RegExp(hide.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+    let out = '', at = 0;
+    text.replace(re, (m, off) => { out += esc(text.slice(at, off)) + hid(m.length); at = off + m.length; return m; });
+    return out + esc(text.slice(at));
   }
-  function trackCard(t, byAppeal) {
+  function trackInline(t, hide = []) {
+    const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
+    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">▶</button>` : '';
+    return `<span class="ti">« ${masked(t.title, hide)} »</span>${btn}`;
+  }
+  function trackCard(t, byAppeal, hide = []) {
     const cover = t.cover ? `<img src="${esc(t.cover)}" alt="">` : '<span class="nocover" aria-hidden="true"></span>';
-    const sub = byAppeal ? '<span class="badge">Validé à la main</span>' : `<span>${esc((t.artists || []).join(', '))}</span>`;
-    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">▶</button>` : '';
-    const title = t.link ? `<a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.title)}</a>` : esc(t.title);
+    const names = (t.artists || []).map((n) => (hide.includes(n) ? hid(n.length) : esc(n))).join(', ');
+    const sub = byAppeal ? '<span class="badge">Validé à la main</span>' : `<span>${names}</span>`;
+    const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
+    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">▶</button>` : '';
+    // Le lien Deezer montrerait tous les artistes : il n'apparaît qu'une fois la manche finie.
+    const title = t.link && !hide.length ? `<a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.title)}</a>` : masked(t.title, hide);
     return `<div class="track">${cover}<div class="tt"><b>${title}</b>${sub}</div>${btn}</div>`;
   }
   function bindTracks() {

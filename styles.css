@@ -274,3 +274,6 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Artistes masqués pendant la manche (anti-triche) */
+.hid, .track .tt .hid { display: inline-block; vertical-align: bottom; overflow: visible; filter: blur(5px); user-select: none; -webkit-user-select: none; color: var(--paper); opacity: .8; letter-spacing: .05em; }
