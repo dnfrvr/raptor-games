@@ -71,8 +71,14 @@ function artistOut(a) {
 
 async function searchArtists(q, limit = 8) {
   if (!q || !q.trim()) return [];
-  const data = await get(`/search/artist?q=${encodeURIComponent(q.trim())}&limit=${limit}`);
-  return (data.data || []).map(artistOut);
+  // On prend large (25 résultats) puis on classe par nombre de fans Deezer, les plus connus d'abord.
+  // Exception : un artiste dont le nom correspond exactement à la saisie reste en tête.
+  const data = await get(`/search/artist?q=${encodeURIComponent(q.trim())}&limit=25`);
+  const typed = norm(q);
+  return (data.data || [])
+    .map(artistOut)
+    .sort((x, y) => (norm(y.name) === typed) - (norm(x.name) === typed) || y.fans - x.fans)
+    .slice(0, limit);
 }
 
 async function getArtist(id) {
