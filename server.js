@@ -13,7 +13,8 @@ const io = new Server(server, { cors: { origin: false } });
 const rooms = new Map();
 
 // Tous les fichiers sont à la racine : on ne sert que ceux du navigateur (jamais le code serveur).
-const send = (f) => (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: f === 'index.html' ? 0 : '1h' });
+// Pas de cache navigateur : après une mise à jour, tout le monde reçoit la nouvelle version tout de suite.
+const send = (f) => (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: 0 });
 app.get('/', send('index.html'));
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
