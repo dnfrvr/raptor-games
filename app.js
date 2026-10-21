@@ -15,7 +15,8 @@
   let roomCode = store.get('rg_room') || '';
   let S = null;          // dernier état reçu du serveur
   let stateAt = 0;
-  let muted = store.get('rg_mute') === '1';
+  // Lecture auto des extraits : désactivée par défaut, le joueur peut l'activer (choix mémorisé).
+  let muted = store.get('rg_autoplay') !== '1';
   let pickedArtist = null;
   let lastChainLen = -1;
   let lastRoundId = null;
@@ -229,7 +230,7 @@
         bindTracks();
       } else if (last) {
         proof.hidden = false;
-        proof.textContent = `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
+        proof.textContent = last.random ? `Tiré au hasard pour ${S.players[last.by]?.name || ''}` : `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
       } else proof.hidden = true;
       // Nouvelle saisie seulement quand la chaîne avance : en cas d'erreur, le joueur garde ce qu'il a tapé.
       $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null;
@@ -261,11 +262,12 @@
     $('#playForm').hidden = !myTurn;
     $('#songInput').hidden = choosing;
     $('#giveupBtn').hidden = choosing;
+    $('#randomBtn').hidden = !choosing;
     $('#artistInput').placeholder = choosing ? 'Un artiste pour lancer la chaîne' : `Un artiste qui a fait un son avec ${cur ? cur.name : ''}`;
     $('#submitBtn').textContent = choosing ? 'Lancer' : 'Valider';
     if (myTurn) {
       $('#artistInput').disabled = busy; $('#songInput').disabled = busy;
-      $('#submitBtn').disabled = busy; $('#giveupBtn').disabled = busy;
+      $('#submitBtn').disabled = busy; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
       resetGiveUp();
       renderFeedback(r, cur, opp);
     }
@@ -274,7 +276,8 @@
     $('#watch').hidden = myTurn || !playing;
     if (!myTurn && playing) {
       let txt = `<span class="dots">${choosing ? 'Choix en cours' : 'Recherche en cours'}</span>`;
-      if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
+      if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
+      else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
       else if (r.lastError) txt = r.lastError.why === 'used'
         ? `${esc(turnName)} a proposé <b>${esc(r.lastError.artist.name)}</b>, déjà cité. <span class="dots">Il cherche encore</span>`
@@ -310,6 +313,11 @@
 
   function renderFeedback(r, cur, opp) {
     const fb = $('#feedback');
+    if (r.checking && r.checking.random) {
+      fb.hidden = false; fb.className = 'feedback info';
+      fb.innerHTML = `<span class="spin"></span>Tirage d'un rappeur français…`;
+      return;
+    }
     if (r.checking) {
       fb.hidden = false; fb.className = 'feedback info';
       fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(r.checking.artist.name)}. Chrono en pause.`;
@@ -328,12 +336,13 @@
       const f = $('#playForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
       if (navigator.vibrate) try { navigator.vibrate([30, 40, 30]); } catch {}
       // Garde la saisie, sélectionnée pour retaper vite.
-      setTimeout(() => { const i = $('#artistInput'); if (!i.value) i.value = e.artist.name; i.focus({ preventScroll: true }); i.select(); }, 30);
+      if (e.why !== 'random') setTimeout(() => { const i = $('#artistInput'); if (!i.value) i.value = e.artist.name; i.focus({ preventScroll: true }); i.select(); }, 30);
     }
     fb.hidden = false; fb.className = 'feedback';
     const msg = {
       used: `<b>${esc(e.artist.name)}</b> est déjà dans la chaîne. Trouve quelqu'un d'autre.`,
-      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Vérifie l'orthographe ou ajoute le titre du son.`,
+      random: 'Le tirage n’a pas marché : Deezer ne répond pas. Réessaie ou tape un artiste.',
+      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Vérifie l'orthographe ou ajoute le titre du son.`,
       refused: `${esc(opp)} a refusé <b>${esc(e.artist.name)}</b>. Propose un autre artiste.`,
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande à ${esc(opp)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
@@ -422,10 +431,11 @@
   }
   ['play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, syncPlayButtons));
   function syncMute() {
-    $('#muteBtn').textContent = muted ? 'Son coupé' : 'Son activé';
+    $('#muteBtn').textContent = muted ? 'Lecture auto : non' : 'Lecture auto : oui';
     $('#muteBtn').setAttribute('aria-pressed', String(muted));
   }
-  $('#muteBtn').onclick = () => { muted = !muted; store.set('rg_mute', muted ? '1' : '0'); if (muted) audio.pause(); syncMute(); };
+  syncMute();
+  $('#muteBtn').onclick = () => { muted = !muted; store.set('rg_autoplay', muted ? '0' : '1'); if (muted) audio.pause(); syncMute(); };
 
   // ================= CHRONO =================
   function tickClock() {
@@ -530,6 +540,7 @@
     armTwoTap($('#giveupBtn'), 'Je sèche', 'Sûr ?', () => socket.emit('giveup'));
   }
 
+  $('#randomBtn').onclick = () => socket.emit('randomStart');
   $('#judgeYes').onclick = () => socket.emit('judge', { ok: true });
   $('#judgeNo').onclick = () => socket.emit('judge', { ok: false });
 

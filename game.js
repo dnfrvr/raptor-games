@@ -3,6 +3,18 @@ const deezer = require('./deezer');
 
 const TURN_CHOICES = [0, 10, 15, 20, 30, 45, 60];
 
+// Rappeurs français proposés par le bouton « Au hasard » (photo et identifiant récupérés en direct sur Deezer).
+const FR_RAPPERS = [
+  'Ninho', 'Jul', 'SCH', 'Booba', 'Damso', 'PNL', 'Nekfeu', 'Orelsan', 'Niska', 'Gazo', 'Tiakola',
+  'Werenoi', 'Hamza', 'Naps', 'Kaaris', 'Rohff', 'Lacrim', 'Alonzo', 'Soprano', 'Gims', 'Vald',
+  'Leto', 'Koba LaD', 'Freeze Corleone', 'Laylow', 'Josman', 'Zola', 'Maes', 'Sofiane', 'Kalash Criminel',
+  'Heuss L\'enfoiré', 'Dinos', 'Lomepal', 'Kekra', 'Sneazzy', 'Alpha Wann', 'Ziak', 'Soolking', 'Rim\'K',
+  'Kery James', 'Gradur', 'MHD', 'Moha La Squale', 'Guy2Bezbar', 'Plk', 'Zkr', 'Jok\'air',
+  'Lefa', 'Bigflo & Oli', 'Nemir', 'Mister V', 'Sadek', 'La Fouine', 'Sexion d\'Assaut', 'Médine', 'Youssoupha',
+  'Disiz', 'Oxmo Puccino', 'IAM', 'Kenza Farah', 'Timal', 'Landy', 'Hornet La Frappe', 'Bosh', 'Green Montana',
+  'Kofs', 'Djadja & Dinaz', 'RK', 'Zed', 'Favé', 'Gambi', 'Rsko', 'Jolagreen23', 'La Mano 1.9',
+];
+
 function code() {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
@@ -144,6 +156,38 @@ class Room {
     return this.round.chain.some((l) => l.artist.id === a.id || deezer.norm(l.artist.name) === deezer.norm(a.name));
   }
 
+  setStart(a, random) {
+    const r = this.round;
+    r.start = a;
+    r.chain.push({ artist: a, by: r.turn, track: null, random });
+    r.turn = 1 - r.turn;
+    this.resetClock();
+    this.broadcast();
+  }
+
+  // Le joueur qui commence laisse le jeu tirer un rappeur français au hasard.
+  async randomStart(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    if (this.phase !== 'playing' || i !== r.turn || !this.choosing() || r.checking) return;
+    r.checking = { artist: { name: 'au hasard' }, random: true };
+    this.broadcast();
+    const used = new Set(this.history.map((h) => h.start && deezer.norm(h.start.name)));
+    const pool = [...new Set(FR_RAPPERS)].filter((n) => !used.has(deezer.norm(n)));
+    let found = null;
+    for (let tries = 0; tries < 4 && !found; tries++) {
+      const name = pool[Math.floor(Math.random() * pool.length)] || 'Ninho';
+      try {
+        const res = await deezer.searchArtists(name, 5);
+        found = res.find((x) => deezer.norm(x.name) === deezer.norm(name)) || res[0] || null;
+      } catch (e) { console.error('random', e.message); }
+    }
+    if (this.round !== r || this.phase !== 'playing') return;
+    r.checking = false;
+    if (!found) { r.lastError = { artist: { name: 'Tirage' }, why: 'random' }; this.broadcast(); return; }
+    this.setStart(found, true);
+  }
+
   async answer(token, { artist, song }) {
     const i = this.idx(token);
     const r = this.round;
@@ -152,14 +196,7 @@ class Room {
     const a = { id: Number(artist.id), name: String(artist.name).slice(0, 80), picture: artist.picture || null };
 
     // Premier coup de la manche : le joueur pose l'artiste de départ, rien à vérifier.
-    if (this.choosing()) {
-      r.start = a;
-      r.chain.push({ artist: a, by: r.turn, track: null });
-      r.turn = 1 - r.turn;
-      this.resetClock();
-      this.broadcast();
-      return;
-    }
+    if (this.choosing()) return this.setStart(a, false);
     const cur = this.current();
     const attempt = { artist: a, song: song ? String(song).slice(0, 100) : '' };
 
