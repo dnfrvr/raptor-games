@@ -580,6 +580,24 @@
   }
   socket.on('connect', () => { if (S) $('#toast').hidden = true; });
 
+  // ================= MISE À JOUR AUTOMATIQUE =================
+  // Si le site a été mis à jour depuis l'ouverture de la page, on recharge pour avoir la nouvelle version.
+  const meta = document.querySelector('meta[name="app-version"]');
+  const MY_VERSION = meta ? meta.content : null;
+  if (meta) $('#version').textContent = `Version ${MY_VERSION}, mise à jour le ${new Date(meta.dataset.updated).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+  function checkVersion(v) {
+    if (!MY_VERSION || !v || v === MY_VERSION) { try { sessionStorage.removeItem('rg_reload'); } catch {} return; }
+    // Garde-fou : une seule tentative par minute pour ne jamais boucler.
+    let lastTry = 0; try { lastTry = Number(sessionStorage.getItem('rg_reload')) || 0; } catch {}
+    if (Date.now() - lastTry < 60000) return;
+    try { sessionStorage.setItem('rg_reload', String(Date.now())); } catch {}
+    location.reload();
+  }
+  socket.on('version', checkVersion);
+  const recheck = () => fetch('/api/version', { cache: 'no-store' }).then((r) => r.json()).then((d) => checkVersion(d.version)).catch(() => {});
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') recheck(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) recheck(); });
+
   if (ownRoom && store.get('rg_name')) socket.emit('join', { token, code: inviteCode, name: null });
   render();
 })();

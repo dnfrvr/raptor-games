@@ -1,4 +1,6 @@
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -15,7 +17,18 @@ const rooms = new Map();
 // Tous les fichiers sont à la racine : on ne sert que ceux du navigateur (jamais le code serveur).
 // Pas de cache navigateur : après une mise à jour, tout le monde reçoit la nouvelle version tout de suite.
 const send = (f) => (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: 0 });
-app.get('/', send('index.html'));
+
+// Version calculée automatiquement à partir des fichiers du jeu : elle change à chaque mise à jour,
+// sans rien avoir à modifier à la main. Les navigateurs s'en servent pour se recharger tout seuls.
+const CLIENT_FILES = ['index.html', 'app.js', 'styles.css'];
+const VERSION = crypto.createHash('sha1').update(CLIENT_FILES.map((f) => fs.readFileSync(path.join(__dirname, f))).join('\n')).digest('hex').slice(0, 7);
+const UPDATED = new Date(Math.max(...CLIENT_FILES.map((f) => fs.statSync(path.join(__dirname, f)).mtimeMs)));
+const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
+  .replace(/\?v=[\w.]+/g, '?v=' + VERSION)
+  .replace('<head>', `<head>\n  <meta name="app-version" content="${VERSION}" data-updated="${UPDATED.toISOString()}">`);
+const sendIndex = (_, res) => { res.set('Cache-Control', 'no-cache, no-store, must-revalidate'); res.type('html').send(INDEX); };
+app.get('/', sendIndex);
+app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION }); });
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
 
@@ -36,9 +49,10 @@ app.get('/api/room/:code', (req, res) => {
 });
 
 app.get('/health', (_, res) => res.send('ok'));
-app.get('/r/:code', (_, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/r/:code', sendIndex);
 
 io.on('connection', (socket) => {
+  socket.emit('version', VERSION);
   let room = null;
   let token = null;
 
@@ -75,6 +89,7 @@ io.on('connection', (socket) => {
   socket.on('giveup', act(() => room.giveUp(token)));
   socket.on('appeal', act(() => room.appeal(token)));
   socket.on('judge', act((d) => room.judge(token, !!d.ok)));
+  socket.on('grant', act(() => room.grant(token)));
 
   socket.on('disconnect', () => {
     if (!room) return;
@@ -90,4 +105,4 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Roland Gamos prêt sur http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Roland Gamos ${VERSION} prêt sur http://localhost:${PORT}`));

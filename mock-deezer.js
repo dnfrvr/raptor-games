@@ -1,7 +1,7 @@
 // Faux Deezer hors-ligne pour tester le jeu sans réseau : DEEZER_MOCK=1 npm start
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
-  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'],
+  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'],
 ].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: 1000000 - id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
@@ -14,6 +14,7 @@ const tracks = [
   [107, 'Ma meilleure ennemie', 'Gims', ['Damso']],
   [108, 'Mamacita', 'Tiakola', ['Gims']],
   [109, 'Sans moi', 'SCH', ['Ninho']],
+  [110, 'Ma vie (feat. Francisco)', 'Mister You', ['DJ Abdel', 'Francisco']],
 ].map(([id, title, main, feats]) => ({
   id, title, title_short: title, preview: null, link: '#',
   album: { title, cover_medium: null },
