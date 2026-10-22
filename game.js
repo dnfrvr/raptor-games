@@ -30,6 +30,7 @@ const BOT = {
   hard:   { think: [2000, 4000], depth: 100, dry: 0.03, dryStep: 0.01 },
 };
 const BOT_TOKEN = '__bot__';
+const MAX_PLAYERS = 8;
 const MAX_TRIES = 3;        // essais par tour
 const AFTER_MISS_MS = 10000; // temps minimum laissé après une mauvaise réponse
 
@@ -60,7 +61,8 @@ class Room {
   addPlayer(token, name) {
     const existing = this.players.find((p) => p.token === token);
     if (existing) { existing.name = name || existing.name; return existing; }
-    if (this.players.length >= 2) return null;
+    // Nouveaux joueurs seulement dans le salon (un joueur déjà inscrit peut toujours revenir).
+    if (this.phase !== 'lobby' || this.players.length >= (this.solo ? 2 : MAX_PLAYERS)) return null;
     const p = { token, name: (name || 'Joueur').slice(0, 20), score: 0, sockets: new Set() };
     this.players.push(p);
     return p;
@@ -78,7 +80,7 @@ class Room {
   }
 
   async start(token) {
-    // Lancement : l'hôte. Revanche : n'importe lequel des deux (si l'hôte est parti, l'autre n'est pas bloqué).
+    // Lancement : l'hôte. Revanche : n'importe quel joueur (si l'hôte est parti, les autres ne sont pas bloqués).
     if (this.players.length < 2 || this.idx(token) < 0) return;
     if (this.phase === 'lobby' && token !== this.hostToken) return;
     if (this.phase !== 'lobby' && this.phase !== 'finished') return;
@@ -92,8 +94,9 @@ class Room {
   // Mode illimité : n'importe quel joueur peut arrêter la partie entre deux manches.
   stop(token) {
     if (this.phase !== 'roundEnd' || this.idx(token) < 0) return;
-    const [a, b] = this.players.map((p) => p.score);
-    this.final = { stopped: true, winner: a === b ? null : a > b ? 0 : 1, by: this.idx(token) };
+    const best = Math.max(...this.players.map((p) => p.score));
+    const top = this.players.map((p, i) => (p.score === best ? i : -1)).filter((i) => i >= 0);
+    this.final = { stopped: true, winner: top.length === 1 ? top[0] : null, by: this.idx(token) };
     this.phase = 'finished';
     this.broadcast();
   }
@@ -105,8 +108,8 @@ class Room {
 
   async newRound() {
     this.roundNo++;
-    // Le premier joueur alterne à chaque manche ; c'est lui qui choisit l'artiste de départ.
-    const first = (this.roundNo - 1) % 2;
+    // Le premier joueur tourne à chaque manche ; c'est lui qui choisit l'artiste de départ.
+    const first = (this.roundNo - 1) % this.players.length;
     this.roundSeq = (this.roundSeq || 0) + 1;
     this.round = {
       id: this.roundSeq,
@@ -123,12 +126,38 @@ class Room {
       lastError: null,
       winner: null,
       reason: null,
+      out: [],      // joueurs éliminés de la manche : { who, reason, on }
+      lastOut: null,
     };
     this.phase = 'playing';
     this.broadcast();
   }
 
   choosing() { return this.round && this.round.chain.length === 0; }
+  isOut(i) { return this.round.out.some((o) => o.who === i); }
+  alive() { return this.players.map((_, i) => i).filter((i) => !this.isOut(i)); }
+  nextAlive(i) {
+    const n = this.players.length;
+    for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!this.isOut(j)) return j; }
+    return i;
+  }
+
+  // Le joueur i sèche : il est éliminé de la manche. S'il ne reste qu'un joueur, il gagne la manche ;
+  // sinon la chaîne continue avec le joueur suivant.
+  eliminate(i, reason) {
+    const r = this.round;
+    const cur = this.current();
+    r.lastOut = { who: i, reason, on: cur ? cur.name : null };
+    r.out.push(r.lastOut);
+    const alive = this.alive();
+    if (alive.length <= 1) return this.endRound(alive.length ? alive[0] : this.nextAlive(i), reason);
+    clearTimeout(this.timer);
+    clearTimeout(this.botTimer); this.botKey = '';
+    r.turn = this.nextAlive(i);
+    r.tries = 0; r.lastError = null; r.appeal = null; r.checking = false;
+    this.resetClock();
+    this.broadcast();
+  }
   current() { const c = this.round.chain; return c.length ? c[c.length - 1].artist : null; }
 
   startClock() {
@@ -151,13 +180,13 @@ class Room {
 
   timeout() {
     if (this.phase !== 'playing' || this.round.checking || this.round.appeal || this.choosing()) return;
-    this.endRound(1 - this.round.turn, 'timeout');
+    this.eliminate(this.round.turn, 'timeout');
   }
 
   giveUp(token) {
     const i = this.idx(token);
     if (this.phase !== 'playing' || i !== this.round.turn || this.round.checking || this.round.appeal || this.choosing()) return;
-    this.endRound(1 - i, 'giveup');
+    this.eliminate(i, 'giveup');
   }
 
   endRound(winner, reason) {
@@ -182,7 +211,7 @@ class Room {
     const r = this.round;
     r.start = a;
     r.chain.push({ artist: a, by: r.turn, track: null, random });
-    r.turn = 1 - r.turn;
+    r.turn = this.nextAlive(r.turn);
     this.resetClock();
     this.broadcast();
   }
@@ -259,7 +288,7 @@ class Room {
   miss() {
     const r = this.round;
     r.tries++;
-    if (r.tries >= MAX_TRIES && r.lastError.why === 'used') return this.endRound(1 - r.turn, 'tries');
+    if (r.tries >= MAX_TRIES && r.lastError.why === 'used') return this.eliminate(r.turn, 'tries');
     this.missClock();
     this.broadcast();
   }
@@ -277,7 +306,7 @@ class Room {
   accept(a, track, byAppeal) {
     const r = this.round;
     r.chain.push({ artist: a, by: r.turn, track, byAppeal });
-    r.turn = 1 - r.turn;
+    r.turn = this.nextAlive(r.turn);
     r.lastError = null;
     r.appeal = null;
     r.appealUsed = false;
@@ -320,7 +349,7 @@ class Room {
     } else {
       r.lastError = { artist, song, why: 'refused' };
       // Refus du dernier essai : plus rien à tenter, la manche est perdue.
-      if (r.tries >= MAX_TRIES) return this.endRound(1 - r.turn, 'tries');
+      if (r.tries >= MAX_TRIES) return this.eliminate(r.turn, 'tries');
       this.missClock();
       this.broadcast();
     }
@@ -335,6 +364,7 @@ class Room {
     return {
       code: this.code,
       solo: this.solo,
+      maxPlayers: this.solo ? 2 : MAX_PLAYERS,
       me,
       host: this.idx(this.hostToken),
       phase: this.phase,
@@ -390,7 +420,7 @@ class Room {
     } catch (e) { console.error('bot', e.message); }
     if (this.round !== r || this.phase !== 'playing' || r.turn !== b) return;
     const dries = Math.random() < Math.min(0.9, lvl.dry + lvl.dryStep * n);
-    if (!options.length || dries) return this.endRound(1 - b, 'giveup');
+    if (!options.length || dries) return this.eliminate(b, 'giveup');
     // Préfère les feats les plus évidents (en haut du top) quand il est facile, pioche plus large sinon.
     const span = Math.max(1, Math.ceil(options.length * (lvl === BOT.easy ? 0.4 : 1)));
     const pick = options[Math.floor(Math.random() * span)];

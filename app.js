@@ -23,6 +23,7 @@
   let lastErrKey = '';
   let lastTurnKey = '';
   let lastMask = null;
+  let lastOutKey = '';
 
   const socket = io({ transports: ['websocket', 'polling'] });
 
@@ -46,6 +47,12 @@
         $('#soloBtn').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
         history.replaceState(null, '', '/');
+      } else if (info.started) {
+        $('#invited').textContent = 'Cette partie a déjà commencé. Tu peux en créer une nouvelle.';
+        $('#invited').classList.add('warn');
+        inviteCode = '';
+        $('#soloBtn').hidden = false;
+        $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.full) {
         $('#invited').textContent = 'Cette partie est déjà complète. Tu peux en créer une nouvelle.';
         $('#invited').classList.add('warn');
@@ -132,7 +139,8 @@
 
   function renderLobby() {
     const isHost = S.me === S.host;
-    const ready = S.players.length === 2;
+    const N = S.players.length, max = S.maxPlayers || 2;
+    const ready = N >= 2;
     const url = `${location.origin}/r/${S.code}`;
     $('#lobbyCode').textContent = S.code;
     $('#inviteUrl').textContent = url.replace(/^https?:\/\//, '');
@@ -140,19 +148,23 @@
     // Une fois l'adversaire arrivé, l'invitation passe au second plan.
     $('#invite').classList.toggle('done', ready);
     $('#invite').hidden = !!S.solo;
-    $('#lobbyTitle').textContent = ready ? 'Vous êtes deux' : isHost ? 'Invite ton adversaire' : 'En attente';
-    $('#shareBtn').hidden = ready || !isHost;
-    $('#copyBtn').hidden = ready || !isHost;
-    $('#inviteUrl').hidden = ready || !isHost;
+    // L'invitation reste disponible tant qu'il reste des places (jusqu'à 8 joueurs).
+    const full = N >= max;
+    $('#lobbyTitle').textContent = ready ? (N === 2 ? 'Vous êtes deux' : `Vous êtes ${N}`) : isHost ? 'Invite tes potes' : 'En attente';
+    $('#shareBtn').hidden = full || !isHost;
+    $('#copyBtn').hidden = full || !isHost;
+    $('#inviteUrl').hidden = full || !isHost;
     $('#shareBtn').onclick = async () => {
       if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
       copy(url);
     };
     $('#copyBtn').onclick = () => copy(url);
 
-    $('#seats').innerHTML = [0, 1].map((i) => {
+    const seatIdx = S.players.map((_, i) => i);
+    if (!S.solo && N < max) seatIdx.push(N);
+    $('#seats').innerHTML = seatIdx.map((i) => {
       const p = S.players[i];
-      if (!p) return `<li class="seat empty"><span class="t">Joueur 2</span><span class="n">Pas encore là</span></li>`;
+      if (!p) return `<li class="seat empty"><span class="t">Joueur ${i + 1}</span><span class="n">${i === 1 ? 'Pas encore là' : 'Place libre'}</span></li>`;
       const tags = [i === S.me ? 'Toi' : p.bot ? `Niveau ${levelName(S.settings.botLevel).toLowerCase()}` : i === S.host ? 'Hôte' : 'Invité'];
       if (!p.online) tags.push('hors ligne');
       return `<li class="seat p${i}"><span class="t">${tags.join(', ')}</span><span class="n">${esc(p.name)}</span></li>`;
@@ -192,8 +204,8 @@
     $('#startBtn').disabled = !ready;
     $('#startBtn').onclick = () => { unlockAudio(); socket.emit('start'); };
     $('#lobbyWait').textContent = !ready
-      ? (isHost ? 'La partie démarre dès que ton adversaire a rejoint.' : '')
-      : isHost ? '' : `${S.players[S.host].name} va lancer la partie.`;
+      ? (isHost ? 'Tu pourras lancer dès qu’un autre joueur aura rejoint.' : '')
+      : isHost ? (S.solo || full ? '' : `Jusqu’à ${max} joueurs. Lance quand tout le monde est là.`) : `${S.players[S.host].name} va lancer la partie.`;
   }
 
   function copy(text) {
@@ -206,11 +218,28 @@
     return a && a.picture ? `<img class="av ${cls}" src="${esc(a.picture)}" alt="">` : `<span class="av ${cls}" aria-hidden="true">${esc(((a && a.name) || '?')[0])}</span>`;
   }
 
+  // À deux : le bandeau face à face. À trois et plus : une rangée de joueurs avec le chrono à gauche.
+  let scorebugFor = 0;
+  const CLOCK = `<div class="clock" id="clock" role="timer" aria-label="Temps restant"><span id="clockNum">∞</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"/></svg></div>`;
+  function buildScorebug(n) {
+    if (n === scorebugFor) return;
+    scorebugFor = n;
+    const sb = $('#scorebug');
+    sb.classList.toggle('multi', n > 2);
+    sb.innerHTML = n <= 2
+      ? `<div class="side" data-p="0"><span class="pname"></span><span class="pscore"></span></div>${CLOCK}<div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>`
+      : `${CLOCK}<ol class="roster">${Array.from({ length: n }, (_, i) => `<li class="pl p${i}" data-p="${i}"><span class="pname"></span><span class="pscore"></span></li>`).join('')}</ol>`;
+  }
+
   function renderGame() {
     const r = S.round;
-    const opp = S.players[1 - S.me]?.name || 'Ton adversaire';
-
-    document.querySelectorAll('.scorebug .side').forEach((el) => {
+    const N = S.players.length;
+    // À deux : on parle de l'adversaire par son nom ; à plusieurs : « les autres ».
+    const opp = N === 2 ? (S.players[1 - S.me]?.name || 'Ton adversaire') : 'les autres';
+    const oppTo = N === 2 ? `à ${opp}` : 'aux autres';
+    buildScorebug(N);
+    const outSet = new Set((r?.out || []).map((o) => o.who));
+    document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
       const i = Number(el.dataset.p);
       const p = S.players[i] || { name: '—', score: 0, online: false };
       el.querySelector('.pname').textContent = p.name;
@@ -218,6 +247,7 @@
       el.classList.toggle('active', !!r && S.phase === 'playing' && r.turn === i);
       el.classList.toggle('off', !p.online);
       el.classList.toggle('me', i === S.me);
+      el.classList.toggle('out', S.phase === 'playing' && outSet.has(i));
     });
     $('#roundLabel').textContent = S.settings.target ? `Manche ${S.roundNo}, premier à ${S.settings.target}` : `Manche ${S.roundNo}, sans limite`;
     syncMute();
@@ -298,7 +328,7 @@
       $('#artistInput').disabled = busy || out; $('#songInput').disabled = busy || out;
       $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
       resetGiveUp();
-      renderFeedback(r, cur, opp);
+      renderFeedback(r, cur, opp, oppTo);
     }
 
     // --- Vue de l'adversaire ---
@@ -316,6 +346,7 @@
       const grantable = !r.checking && !r.appeal && r.lastError && ['notfound', 'api', 'refused'].includes(r.lastError.why);
       const p = S.players[r.turn];
       if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`;
+      if (outSet.has(S.me)) txt = `<b>Tu es éliminé de cette manche.</b> ` + txt;
       $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '');
       if (grantable) armTwoTap($('#grantBtn'), 'Valider ce feat', 'Sûr ?', () => socket.emit('grant'));
     }
@@ -340,11 +371,22 @@
       lastChainLen = r.chain.length;
     }
 
+    // Annonce des éliminations pendant la manche (à 3 et plus).
+    const outKey = `${r.id}-${(r.out || []).length}`;
+    if (outKey !== lastOutKey) {
+      if (lastOutKey && r.out && r.out.length && S.phase === 'playing') {
+        const o = r.lastOut, me = o.who === S.me, nm = S.players[o.who].name;
+        toast(o.reason === 'timeout' ? `Temps écoulé pour ${me ? 'toi' : nm} : éliminé de la manche`
+          : o.reason === 'tries' ? `${me ? 'Tu as' : nm + ' a'} raté 3 essais : éliminé de la manche`
+          : `${me ? 'Tu as' : nm + ' a'} séché : éliminé de la manche`, 3500);
+      }
+      lastOutKey = outKey;
+    }
     renderEnd(r, cur);
     tickClock();
   }
 
-  function renderFeedback(r, cur, opp) {
+  function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
     if (r.checking && r.checking.random) {
       fb.hidden = false; fb.className = 'feedback info';
@@ -358,7 +400,7 @@
     }
     if (r.appeal) {
       fb.hidden = false; fb.className = 'feedback info';
-      fb.innerHTML = `<span class="spin"></span>${esc(opp)} décide si ton feat compte. Chrono en pause.`;
+      fb.innerHTML = `<span class="spin"></span>${S.players.length === 2 ? `${esc(opp)} décide` : 'Les autres décident'} si ton feat compte. Chrono en pause.`;
       return;
     }
     if (!r.lastError) { fb.hidden = true; return; }
@@ -375,9 +417,9 @@
     const msg = {
       used: `<b>${esc(e.artist.name)}</b> est déjà dans la chaîne. Trouve quelqu'un d'autre.`,
       random: 'Le tirage n’a pas marché : Deezer ne répond pas. Réessaie ou tape un artiste.',
-      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande à ${esc(opp)} de le valider. Sinon, propose quelqu'un d'autre.`,
-      refused: `${esc(opp)} a refusé <b>${esc(e.artist.name)}</b>. Propose un autre artiste.`,
-      api: `Deezer ne répond pas. Réessaie dans un instant ou demande à ${esc(opp)} de valider.`,
+      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande ${esc(oppTo)} de le valider. Sinon, propose quelqu'un d'autre.`,
+      refused: `<b>${esc(e.artist.name)}</b> a été refusé. Propose un autre artiste.`,
+      api: `Deezer ne répond pas. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
     const canAppeal = e.why === 'notfound' || e.why === 'api';
     const max = r.maxTries || 3, left = max - (r.tries || 0);
@@ -385,9 +427,9 @@
       : left <= 0 ? ''
       : ` Encore ${left} essai${left > 1 ? 's' : ''}.`;
     const body = left <= 0 && e.why === 'notfound'
-      ? `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande à ${esc(opp)} de valider ce feat, ou sèche.`
+      ? `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande ${esc(oppTo)} de valider ce feat, ou sèche.`
       : msg + triesMsg;
-    fb.innerHTML = `<p>${body}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander à ${esc(opp)}</button>` : '');
+    fb.innerHTML = `<p>${body}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander ${esc(oppTo)}</button>` : '');
     if (canAppeal) $('#appealBtn').onclick = () => socket.emit('appeal');
   }
 
@@ -396,13 +438,16 @@
     const sheet = $('#endSheet');
     const wasHidden = sheet.hidden;
     sheet.hidden = !ended;
+    if (ended && wasHidden) $('#toast').hidden = true; // pas de message par-dessus le résultat
     document.body.classList.toggle('sheet-open', ended);
     if (!ended) return;
 
     const fin = S.phase === 'finished';
     const stopped = fin && S.final && S.final.stopped;
     const w = fin && S.final ? S.final.winner : r.winner;
-    const loserName = S.players[1 - r.winner]?.name;
+    const N = S.players.length;
+    const lastOut = r.lastOut || { who: (r.winner + 1) % N, on: cur ? cur.name : null };
+    const loserName = S.players[lastOut.who]?.name;
     const won = w === S.me;
     const n = Math.max(0, r.chain.length - 1);
 
@@ -412,14 +457,17 @@
     const why = r.reason === 'timeout' ? `${loserName} n'a pas répondu à temps` : r.reason === 'tries' ? `${loserName} a raté ses ${r.maxTries || 3} essais` : `${loserName} a séché`;
     $('#endText').textContent = stopped
       ? (w == null ? 'Score parfaitement égal.' : `Score final en faveur de ${S.players[w].name}.`)
-      : cur ? `${why} sur ${cur.name}, après une chaîne de ${plural(n, 'feat')}.` : `${why} avant même de poser l'artiste de départ.`;
-    $('#endScore').innerHTML = `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`;
+      : (lastOut.on ? `${why} sur ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.` : `${why} avant même de poser l'artiste de départ.`)
+        + (N > 2 ? (r.winner === S.me ? ' Tu es le dernier en jeu.' : ` ${S.players[r.winner].name} est le dernier en jeu.`) : '');
+    $('#endScore').innerHTML = N === 2
+      ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
+      : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
 
     const btn = $('#endBtn');
     btn.hidden = false;
     if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => socket.emit('start'); }
     else {
-      const nextStarter = S.players[S.roundNo % 2]?.name;
+      const nextStarter = S.players[S.roundNo % N]?.name;
       btn.textContent = 'Manche suivante';
       btn.onclick = () => socket.emit('next');
       $('#endText').textContent += ` ${nextStarter === S.players[S.me]?.name ? 'Tu commences' : nextStarter + ' commence'} la prochaine.`;

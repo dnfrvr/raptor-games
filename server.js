@@ -45,7 +45,7 @@ app.get('/api/artists', async (req, res) => {
 app.get('/api/room/:code', (req, res) => {
   const r = rooms.get(String(req.params.code).toUpperCase());
   if (!r) return res.json({ exists: false });
-  res.json({ exists: true, host: r.players[0] ? r.players[0].name : null, full: r.players.length >= 2, phase: r.phase });
+  res.json({ exists: true, host: r.players[0] ? r.players[0].name : null, full: r.solo || r.players.length >= 8, started: r.phase !== 'lobby', players: r.players.length, phase: r.phase });
 });
 
 app.get('/health', (_, res) => res.send('ok'));
@@ -73,7 +73,7 @@ io.on('connection', (socket) => {
     if (!t) return;
     token = String(t);
     const p = r.addPlayer(token, name ? String(name) : null);
-    if (!p) return fail('Le salon est déjà complet.');
+    if (!p) return fail(r.phase !== 'lobby' ? 'La partie a déjà commencé.' : 'Le salon est déjà complet.');
     room = r;
     p.sockets.add(socket.id);
     r.broadcast();

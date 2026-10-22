@@ -282,3 +282,37 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 
 /* Mode solo */
 #soloBtn { margin-top: 16px; }
+
+/* ---------- Jusqu'à 8 joueurs : une couleur par joueur ---------- */
+.p0 { --pc: #ffd21f; --pe: #b38f00; --pt: #1a1400; }
+.p1 { --pc: #d90b2c; --pe: #7f0416; --pt: #fff6ea; }
+.p2 { --pc: #fff6ea; --pe: #a9b6d9; --pt: #0b1638; }
+.p3 { --pc: #3d7bff; --pe: #1f45a8; --pt: #fff6ea; }
+.p4 { --pc: #ff8a3d; --pe: #b3541a; --pt: #2a1100; }
+.p5 { --pc: #ff5fa8; --pe: #a8306a; --pt: #2a0016; }
+.p6 { --pc: #9b6bff; --pe: #5a35b3; --pt: #fff6ea; }
+.p7 { --pc: #b6e84a; --pe: #6f9a1c; --pt: #142000; }
+.seat:not(.empty) { background: var(--pc); color: var(--pt); box-shadow: 0 6px 0 var(--pe); }
+.chain li:not(.empty)::before { background: var(--pc, var(--night-3)); }
+
+/* Rangée des joueurs (3 et plus) */
+.scorebug.multi { display: flex; align-items: center; gap: 10px; background: var(--night); padding: 4px 0; }
+.scorebug.multi .clock { margin: 0; flex: none; width: 62px; height: 62px; }
+.scorebug.multi .clock span { font-size: 26px; }
+.roster { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.roster .pl { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: var(--r); background: var(--night-3); box-shadow: 0 3px 0 var(--deep); border-left: 5px solid var(--pc); max-width: 100%; transition: background .2s, color .2s; }
+.roster .pl .pname { font-size: 15px; max-width: 9ch; }
+.roster .pl .pscore { font-size: 20px; }
+.roster .pl.active { background: var(--pc); color: var(--pt); box-shadow: 0 3px 0 var(--pe); }
+.roster .pl.me .pname { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.roster .pl.out { opacity: .35; }
+.roster .pl.out .pname { text-decoration: line-through; }
+.roster .pl.off { opacity: .55; }
+
+/* Classement en fin de manche (3 et plus) */
+.board { list-style: none; margin: 18px auto 6px; padding: 0; max-width: 320px; display: grid; gap: 6px; text-align: left; }
+.board li { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--night-3); border-radius: var(--r); }
+.board li.me { outline: 2px solid var(--paper); }
+.board .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); flex: none; }
+.board .nm { flex: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board b { font-family: var(--display); font-weight: 400; font-size: 26px; line-height: 1; }
