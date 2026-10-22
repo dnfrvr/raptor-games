@@ -297,8 +297,9 @@
     $('#artistInput').placeholder = choosing ? 'Un artiste pour lancer la chaîne' : `Un artiste qui a fait un son avec ${cur ? cur.name : ''}`;
     $('#submitBtn').textContent = choosing ? 'Lancer' : 'Valider';
     if (myTurn) {
-      $('#artistInput').disabled = busy; $('#songInput').disabled = busy;
-      $('#submitBtn').disabled = busy; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
+      const out = !choosing && (r.tries || 0) >= (r.maxTries || 3); // plus d'essais
+      $('#artistInput').disabled = busy || out; $('#songInput').disabled = busy || out;
+      $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
       resetGiveUp();
       renderFeedback(r, cur, opp);
     }
@@ -310,10 +311,11 @@
       if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
       else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
-      else if (r.lastError) txt = r.lastError.why === 'used'
-        ? `${esc(turnName)} a proposé <b>${esc(r.lastError.artist.name)}</b>, déjà cité. <span class="dots">Il cherche encore</span>`
+      const triesTxt = r.tries ? ` Essai ${r.tries} sur ${r.maxTries || 3} raté.` : '';
+      if (!r.checking && !r.appeal && r.lastError) txt = r.lastError.why === 'used'
+        ? `${esc(turnName)} a proposé <b>${esc(r.lastError.artist.name)}</b>, déjà cité.${triesTxt} <span class="dots">Il cherche encore</span>`
         : r.lastError.why === 'random' ? `<span class="dots">${esc(turnName)} choisit l’artiste de départ</span>`
-        : `Deezer ne trouve pas de son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}. Si ce feat existe, tu peux le valider.`;
+        : `Deezer ne trouve pas de son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}.${triesTxt} Si ce feat existe, tu peux le valider.`;
       const grantable = !r.checking && !r.appeal && r.lastError && ['notfound', 'api', 'refused'].includes(r.lastError.why);
       const p = S.players[r.turn];
       if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`;
@@ -381,7 +383,14 @@
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande à ${esc(opp)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
     const canAppeal = e.why === 'notfound' || e.why === 'api';
-    fb.innerHTML = `<p>${msg}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander à ${esc(opp)}</button>` : '');
+    const max = r.maxTries || 3, left = max - (r.tries || 0);
+    const triesMsg = e.why === 'api' || e.why === 'random' ? ''
+      : left <= 0 ? ''
+      : ` Encore ${left} essai${left > 1 ? 's' : ''}.`;
+    const body = left <= 0 && e.why === 'notfound'
+      ? `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande à ${esc(opp)} de valider ce feat, ou sèche.`
+      : msg + triesMsg;
+    fb.innerHTML = `<p>${body}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander à ${esc(opp)}</button>` : '');
     if (canAppeal) $('#appealBtn').onclick = () => socket.emit('appeal');
   }
 
@@ -403,7 +412,7 @@
     $('#endKicker').textContent = fin ? (stopped ? `Partie arrêtée après ${plural(S.roundNo, 'manche')}` : 'Fin de la partie') : `Fin de la manche ${S.roundNo}`;
     $('#endTitle').textContent = fin ? (w == null ? 'Égalité' : won ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (won ? 'Manche pour toi' : `Manche pour ${S.players[r.winner].name}`);
     sheet.classList.toggle('win', w === S.me);
-    const why = r.reason === 'timeout' ? `${loserName} n'a pas répondu à temps` : `${loserName} a séché`;
+    const why = r.reason === 'timeout' ? `${loserName} n'a pas répondu à temps` : r.reason === 'tries' ? `${loserName} a raté ses ${r.maxTries || 3} essais` : `${loserName} a séché`;
     $('#endText').textContent = stopped
       ? (w == null ? 'Score parfaitement égal.' : `Score final en faveur de ${S.players[w].name}.`)
       : cur ? `${why} sur ${cur.name}, après une chaîne de ${plural(n, 'feat')}.` : `${why} avant même de poser l'artiste de départ.`;

@@ -30,6 +30,8 @@ const BOT = {
   hard:   { think: [2000, 4000], depth: 100, dry: 0.03, dryStep: 0.01 },
 };
 const BOT_TOKEN = '__bot__';
+const MAX_TRIES = 3;        // essais par tour
+const AFTER_MISS_MS = 10000; // chrono après une mauvaise réponse
 
 class Room {
   constructor(io, hostToken, hostName, solo = false) {
@@ -116,6 +118,8 @@ class Room {
       checking: false,
       appeal: null,
       appealUsed: false,
+      tries: 0,
+      maxTries: MAX_TRIES,
       lastError: null,
       winner: null,
       reason: null,
@@ -218,10 +222,10 @@ class Room {
     const cur = this.current();
     const attempt = { artist: a, song: song ? String(song).slice(0, 100) : '' };
 
+    if (r.tries >= MAX_TRIES) return;
     if (this.usedArtist(a)) {
       r.lastError = { ...attempt, why: 'used' };
-      this.broadcast();
-      return;
+      return this.miss();
     }
 
     r.checking = attempt;
@@ -244,10 +248,26 @@ class Room {
       this.accept(a, track, false);
     } else {
       r.lastError = { ...attempt, why: failed ? 'api' : 'notfound' };
-      // Proposition ratée : le chrono repart du début pour laisser le temps d'en tenter une autre.
-      this.resetClock();
-      this.broadcast();
+      // Une panne de Deezer ne coûte pas d'essai au joueur.
+      if (failed) { this.startClock(); return this.broadcast(); }
+      this.miss();
     }
+  }
+
+  // Mauvaise réponse : un essai de moins, et le chrono passe à 10 s.
+  // Au 3e essai raté, la manche est perdue, sauf si le feat peut encore être validé à la main.
+  miss() {
+    const r = this.round;
+    r.tries++;
+    if (r.tries >= MAX_TRIES && r.lastError.why === 'used') return this.endRound(1 - r.turn, 'tries');
+    this.missClock();
+    this.broadcast();
+  }
+
+  missClock() {
+    if (!this.settings.turnSeconds) return;
+    this.round.remaining = Math.min(AFTER_MISS_MS, this.settings.turnSeconds * 1000);
+    this.startClock();
   }
 
   accept(a, track, byAppeal) {
@@ -257,6 +277,7 @@ class Room {
     r.lastError = null;
     r.appeal = null;
     r.appealUsed = false;
+    r.tries = 0;
     this.resetClock();
     this.broadcast();
     this.emitAll('link', { track, artist: a });
@@ -294,7 +315,9 @@ class Room {
       this.accept(artist, { id: null, title: song || 'Validé par l’adversaire', artists: [this.current().name, artist.name], preview: null, link: null, cover: null }, true);
     } else {
       r.lastError = { artist, song, why: 'refused' };
-      this.resetClock();
+      // Refus du dernier essai : plus rien à tenter, la manche est perdue.
+      if (r.tries >= MAX_TRIES) return this.endRound(1 - r.turn, 'tries');
+      this.missClock();
       this.broadcast();
     }
   }
