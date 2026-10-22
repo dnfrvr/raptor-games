@@ -255,12 +255,9 @@
     }
     if (redraw) {
       const proof = $('#proof');
+      // Le son qui prouve le feat est déjà affiché dans la chaîne : pas de doublon sous l'artiste.
       if (last && last.track) {
-        proof.hidden = false;
-        proof.innerHTML = last.byAppeal
-          ? `Validé par ${esc(S.players[1 - last.by]?.name || 'l’adversaire')}${last.track.title && last.track.title !== 'Validé par l’adversaire' ? ` : « ${esc(last.track.title)} »` : ''}`
-          : `Prouvé par ${trackInline(last.track, others(last.track))}`;
-        bindTracks();
+        proof.hidden = true;
       } else if (last) {
         proof.hidden = false;
         proof.textContent = last.random ? `Tiré au hasard pour ${S.players[last.by]?.name || ''}` : `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
