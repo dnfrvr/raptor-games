@@ -592,12 +592,26 @@
       else if (e.key === 'Enter' && sel >= 0 && items[sel]) { e.preventDefault(); choose(items[sel]); }
       else if (e.key === 'Escape') close();
     });
-    list.addEventListener('mousedown', (e) => {
+    // Sélection au doigt ou à la souris. Sur mobile, le clavier peut réécrire le mot en cours de frappe
+    // par-dessus le nom choisi : on termine d'abord la saisie (blur), puis on remplit le nom complet.
+    let picking = false;
+    list.addEventListener('pointerdown', (e) => {
       const li = e.target.closest('li[data-i]');
-      if (li) { e.preventDefault(); choose(items[Number(li.dataset.i)]); }
+      if (!li) return;
+      e.preventDefault();
+      picking = true;
+      choose(items[Number(li.dataset.i)]);
     });
-    input.addEventListener('blur', () => setTimeout(close, 120));
-    function choose(a) { input.value = a.name; close(); onPick(a); }
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    input.addEventListener('blur', () => setTimeout(() => { if (!picking) close(); }, 150));
+    function choose(a) {
+      if (!a) return;
+      input.blur();
+      close();
+      input.value = a.name;
+      // Certains claviers repassent après coup : on réécrit le nom une fois la saisie bien terminée.
+      setTimeout(() => { input.value = a.name; picking = false; onPick(a); }, 60);
+    }
   }
   const fmtFans = (n) => !n ? '' : n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '').replace('.', ',') + ' M fans' : n >= 1e3 ? Math.round(n / 1e3) + ' k fans' : n + ' fans';
 

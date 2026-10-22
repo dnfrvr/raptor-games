@@ -296,7 +296,7 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 .chain li:not(.empty)::before { background: var(--pc, var(--night-3)); }
 
 /* Rangée des joueurs (3 et plus) */
-.scorebug.multi { display: flex; align-items: center; gap: 10px; background: var(--night); padding: 4px 0; }
+.scorebug.multi { display: flex; align-items: center; gap: 10px; background: none; padding: 4px 0; }
 .scorebug.multi .clock { margin: 0; flex: none; width: 62px; height: 62px; }
 .scorebug.multi .clock span { font-size: 26px; }
 .roster { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
