@@ -35,6 +35,7 @@
   const ownRoom = inviteCode && inviteCode === roomCode;
   if (inviteCode && !ownRoom) {
     $('#homeBtn').textContent = 'Rejoindre';
+    $('#soloBtn').hidden = true;
     $('#invited').hidden = false;
     $('#invited').textContent = 'Tu as été invité à une partie.';
     fetch('/api/room/' + encodeURIComponent(inviteCode)).then((r) => r.json()).then((info) => {
@@ -42,12 +43,14 @@
         $('#invited').textContent = 'Ce lien ne mène plus à aucune partie. Tu peux en créer une nouvelle.';
         $('#invited').classList.add('warn');
         inviteCode = '';
+        $('#soloBtn').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
         history.replaceState(null, '', '/');
       } else if (info.full) {
         $('#invited').textContent = 'Cette partie est déjà complète. Tu peux en créer une nouvelle.';
         $('#invited').classList.add('warn');
         inviteCode = '';
+        $('#soloBtn').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.host) {
         $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à une partie.`;
@@ -64,6 +67,16 @@
     setTimeout(() => ($('#homeBtn').disabled = false), 4000);
     if (inviteCode) socket.emit('join', { token, name, code: inviteCode });
     else socket.emit('create', { token, name });
+  });
+
+  // Mode solo : une partie contre le bot, sans invitation.
+  $('#soloBtn').addEventListener('click', () => {
+    const name = $('#nameInput').value.trim() || 'Joueur';
+    store.set('rg_name', name);
+    unlockAudio();
+    $('#soloBtn').disabled = true;
+    setTimeout(() => ($('#soloBtn').disabled = false), 4000);
+    socket.emit('create', { token, name, solo: true });
   });
 
   socket.on('connect', () => {
@@ -114,6 +127,8 @@
 
   // ================= SALON =================
   const TIMERS = [0, 10, 15, 20, 30, 45, 60];
+  const LEVELS = [['easy', 'Facile'], ['normal', 'Normal'], ['hard', 'Difficile']];
+  const levelName = (v) => (LEVELS.find((l) => l[0] === v) || LEVELS[1])[1];
 
   function renderLobby() {
     const isHost = S.me === S.host;
@@ -124,6 +139,7 @@
 
     // Une fois l'adversaire arrivé, l'invitation passe au second plan.
     $('#invite').classList.toggle('done', ready);
+    $('#invite').hidden = !!S.solo;
     $('#lobbyTitle').textContent = ready ? 'Vous êtes deux' : isHost ? 'Invite ton adversaire' : 'En attente';
     $('#shareBtn').hidden = ready || !isHost;
     $('#copyBtn').hidden = ready || !isHost;
@@ -137,7 +153,7 @@
     $('#seats').innerHTML = [0, 1].map((i) => {
       const p = S.players[i];
       if (!p) return `<li class="seat empty"><span class="t">Joueur 2</span><span class="n">Pas encore là</span></li>`;
-      const tags = [i === S.me ? 'Toi' : i === S.host ? 'Hôte' : 'Invité'];
+      const tags = [i === S.me ? 'Toi' : p.bot ? `Niveau ${levelName(S.settings.botLevel).toLowerCase()}` : i === S.host ? 'Hôte' : 'Invité'];
       if (!p.online) tags.push('hors ligne');
       return `<li class="seat p${i}"><span class="t">${tags.join(', ')}</span><span class="n">${esc(p.name)}</span></li>`;
     }).join('');
@@ -148,6 +164,12 @@
     $('#settingsSummary').hidden = isHost;
     $('#settingsSummary').innerHTML = `${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, 'manche')}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
+    $('#levelSet').hidden = !isHost || !S.solo;
+    if (S.solo && isHost) {
+      const el = $('#levelChips');
+      el.innerHTML = LEVELS.map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === S.settings.botLevel}" class="chip ${v === S.settings.botLevel ? 'on' : ''}" data-v="${v}">${l}</button>`).join('');
+      el.querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { botLevel: b.dataset.v })));
+    }
 
     if (isHost) {
       const el = $('#timerChips');
@@ -163,7 +185,7 @@
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
-      $('#targetHint').textContent = t === 0 ? 'On enchaîne les manches et on arrête quand on veut.' : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
+      $('#targetHint').textContent = t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
     }
 
     $('#startBtn').hidden = !isHost;

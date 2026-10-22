@@ -183,4 +183,23 @@ async function findFeat(a, b, songHint) {
   return null;
 }
 
-module.exports = { searchArtists, getArtist, findFeat, norm, setFetcher };
+/**
+ * Pour le bot du mode solo : liste des artistes ayant un son avec `a`, chacun avec le son qui le prouve.
+ * Source : les titres les plus écoutés de l'artiste (Deezer y donne les contributeurs).
+ * depth = nombre de titres regardés (le bot facile ne connaît que les gros sons).
+ */
+async function findCollaborators(a, depth = 100) {
+  const top = await get(`/artist/${a.id}/top?limit=${depth}`);
+  const out = new Map();
+  for (const t of top.data || []) {
+    const people = t.contributors && t.contributors.length ? t.contributors : [];
+    if (!people.some((p) => matches(p, a))) continue;
+    for (const p of people) {
+      if (matches(p, a) || !p.id || out.has(p.id)) continue;
+      out.set(p.id, { artist: artistOut(p), track: trackOut(t) });
+    }
+  }
+  return [...out.values()];
+}
+
+module.exports = { searchArtists, getArtist, findFeat, findCollaborators, norm, setFetcher };

@@ -18,7 +18,7 @@
     <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
     <header class="logo">
       <h1><span>Roland</span><span class="o">Gamos</span></h1>
-      <p class="pitch">Le jeu des featurings, à deux, chacun sur son téléphone.</p>
+      <p class="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
     </header>
 
     <form id="homeForm" class="panel" autocomplete="off">
@@ -26,6 +26,7 @@
       <label class="field" for="nameInput">Ton pseudo</label>
       <input id="nameInput" maxlength="20" placeholder="Dinos" required autocomplete="nickname" enterkeyhint="go">
       <button class="btn big" id="homeBtn" type="submit">Créer une partie</button>
+      <button class="btn ghost big" id="soloBtn" type="button">Jouer en solo</button>
     </form>
 
     <ol class="rules" aria-label="Règles">
@@ -55,6 +56,10 @@
     <ol class="seats" id="seats" aria-label="Joueurs"></ol>
 
     <section class="panel settings" id="settings" aria-label="Réglages">
+      <div class="set" id="levelSet" hidden>
+        <span class="field">Niveau du bot</span>
+        <div class="chips" id="levelChips" role="radiogroup" aria-label="Niveau du bot"></div>
+      </div>
       <div class="set">
         <span class="field">Chrono par tour</span>
         <div class="chips" id="timerChips" role="radiogroup" aria-label="Chrono par tour"></div>

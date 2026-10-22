@@ -22,8 +22,17 @@ function code() {
   return s;
 }
 
+// Bot du mode solo, par niveau : temps de réflexion (ms), nombre de sons qu'il « connaît » par artiste,
+// et probabilité de sécher (de base, puis en plus à chaque maillon de la chaîne).
+const BOT = {
+  easy:   { think: [4000, 7000], depth: 25,  dry: 0.22, dryStep: 0.04 },
+  normal: { think: [3000, 5500], depth: 60,  dry: 0.10, dryStep: 0.025 },
+  hard:   { think: [2000, 4000], depth: 100, dry: 0.03, dryStep: 0.01 },
+};
+const BOT_TOKEN = '__bot__';
+
 class Room {
-  constructor(io, hostToken, hostName) {
+  constructor(io, hostToken, hostName, solo = false) {
     this.io = io;
     this.code = code();
     this.players = [];
@@ -37,6 +46,13 @@ class Room {
     this.lastActive = Date.now();
     this.addPlayer(hostToken, hostName);
     this.hostToken = hostToken;
+    this.solo = solo;
+    if (solo) {
+      this.settings.botLevel = 'normal';
+      this.players.push({ token: BOT_TOKEN, name: 'Bot', score: 0, sockets: new Set(), bot: true });
+    }
+    this.botTimer = null;
+    this.botKey = '';
   }
 
   addPlayer(token, name) {
@@ -55,6 +71,7 @@ class Room {
     if (TURN_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);
     const t = Number(s.target);
     if (Number.isInteger(t) && t >= 0 && t <= 10) this.settings.target = t;
+    if (this.solo && BOT[s.botLevel]) this.settings.botLevel = s.botLevel;
     this.broadcast();
   }
 
@@ -141,6 +158,7 @@ class Room {
 
   endRound(winner, reason) {
     clearTimeout(this.timer);
+    clearTimeout(this.botTimer); this.botKey = '';
     this.round.winner = winner;
     this.round.reason = reason;
     this.round.deadline = null;
@@ -289,13 +307,14 @@ class Room {
     const me = this.idx(forToken);
     return {
       code: this.code,
+      solo: this.solo,
       me,
       host: this.idx(this.hostToken),
       phase: this.phase,
       final: this.final,
       settings: this.settings,
       roundNo: this.roundNo,
-      players: this.players.map((p) => ({ name: p.name, score: p.score, online: p.sockets.size > 0 })),
+      players: this.players.map((p) => ({ name: p.name, score: p.score, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: this.round && {
         ...this.round,
         deadline: undefined,
@@ -309,6 +328,46 @@ class Room {
   broadcast() {
     this.lastActive = Date.now();
     for (const p of this.players) for (const s of p.sockets) this.io.to(s).emit('state', this.view(p.token));
+    if (this.solo) this.botTick();
+  }
+
+  // ---------- Bot (mode solo) ----------
+  botTick() {
+    const r = this.round;
+    if (this.phase !== 'playing' || !r || r.checking) return;
+    const b = this.players.findIndex((p) => p.bot);
+    // Le joueur demande au bot de valider un feat introuvable : le bot lui fait confiance.
+    if (r.appeal && r.turn !== b) return this.botLater('judge', 1500, () => this.judge(BOT_TOKEN, true));
+    if (r.appeal || r.turn !== b) return;
+    const lvl = BOT[this.settings.botLevel] || BOT.normal;
+    const wait = lvl.think[0] + Math.random() * (lvl.think[1] - lvl.think[0]);
+    this.botLater(`play-${r.id}-${r.chain.length}`, wait, () => this.botPlay(lvl));
+  }
+
+  botLater(key, ms, fn) {
+    if (this.botKey === key) return; // déjà programmé
+    clearTimeout(this.botTimer);
+    this.botKey = key;
+    this.botTimer = setTimeout(() => { this.botKey = ''; fn(); }, ms);
+  }
+
+  async botPlay(lvl) {
+    const r = this.round;
+    const b = this.players.findIndex((p) => p.bot);
+    if (this.phase !== 'playing' || r.turn !== b || r.checking || r.appeal) return;
+    if (this.choosing()) return this.randomStart(BOT_TOKEN);
+    const n = r.chain.length;
+    let options = [];
+    try {
+      options = (await deezer.findCollaborators(this.current(), lvl.depth)).filter((o) => !this.usedArtist(o.artist));
+    } catch (e) { console.error('bot', e.message); }
+    if (this.round !== r || this.phase !== 'playing' || r.turn !== b) return;
+    const dries = Math.random() < Math.min(0.9, lvl.dry + lvl.dryStep * n);
+    if (!options.length || dries) return this.endRound(1 - b, 'giveup');
+    // Préfère les feats les plus évidents (en haut du top) quand il est facile, pioche plus large sinon.
+    const span = Math.max(1, Math.ceil(options.length * (lvl === BOT.easy ? 0.4 : 1)));
+    const pick = options[Math.floor(Math.random() * span)];
+    this.accept(pick.artist, pick.track, false);
   }
 }
 

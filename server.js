@@ -58,10 +58,10 @@ io.on('connection', (socket) => {
 
   const fail = (msg) => socket.emit('oops', msg);
 
-  socket.on('create', ({ token: t, name }) => {
+  socket.on('create', ({ token: t, name, solo }) => {
     if (!t) return;
     token = String(t);
-    room = new Room(io, token, String(name || 'Joueur 1'));
+    room = new Room(io, token, String(name || 'Joueur 1'), !!solo);
     rooms.set(room.code, room);
     room.players[0].sockets.add(socket.id);
     room.broadcast();
