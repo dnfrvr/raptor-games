@@ -31,7 +31,7 @@ const BOT = {
 };
 const BOT_TOKEN = '__bot__';
 const MAX_TRIES = 3;        // essais par tour
-const AFTER_MISS_MS = 10000; // chrono après une mauvaise réponse
+const AFTER_MISS_MS = 10000; // temps minimum laissé après une mauvaise réponse
 
 class Room {
   constructor(io, hostToken, hostName, solo = false) {
@@ -254,7 +254,7 @@ class Room {
     }
   }
 
-  // Mauvaise réponse : un essai de moins, et le chrono passe à 10 s.
+  // Mauvaise réponse : un essai de moins, et au moins 10 s au chrono.
   // Au 3e essai raté, la manche est perdue, sauf si le feat peut encore être validé à la main.
   miss() {
     const r = this.round;
@@ -264,9 +264,13 @@ class Room {
     this.broadcast();
   }
 
+  // Après une mauvaise réponse, le joueur garde le temps qu'il lui restait,
+  // mais jamais moins de 10 s (s'il lui en restait 20, il garde 20 ; s'il lui en restait 4, il repasse à 10).
   missClock() {
     if (!this.settings.turnSeconds) return;
-    this.round.remaining = Math.min(AFTER_MISS_MS, this.settings.turnSeconds * 1000);
+    this.pauseClock(); // fige le temps restant (déjà figé pendant la vérification Deezer)
+    const floor = Math.min(AFTER_MISS_MS, this.settings.turnSeconds * 1000);
+    this.round.remaining = Math.max(this.round.remaining, floor);
     this.startClock();
   }
 
