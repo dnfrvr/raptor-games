@@ -176,7 +176,8 @@ function titleMatches(t, hint) {
   return h === base || h === norm(t.title_short) || h === norm(t.title) || h === baseTitle(hint) && baseTitle(hint) === base;
 }
 
-const RARE_RANK = 30; // un feat est « rare » si son son n'est dans les 30 plus écoutés d'aucun des deux artistes
+const RARE_RANK = 30;
+const SMALL_TOP = 50; // top Deezer de moins de 50 sons = petit artiste : on fouille ses sorties // un feat est « rare » si son son n'est dans les 30 plus écoutés d'aucun des deux artistes
 
 /**
  * Cherche un son où a et b apparaissent ensemble.
@@ -202,12 +203,11 @@ async function findFeat(a, b, songHint) {
 
   // 1) En parallèle : les tops des deux artistes (avec la liste des artistes de chaque son) et la recherche « A B »,
   //    qui trouve aussi les sons où les deux ne sont qu'invités. Plus la recherche du titre si le joueur l'a donné.
-  const [topA, topB, pair, hinted] = await Promise.allSettled([
-    get(`/artist/${a.id}/top?limit=100`),
-    get(`/artist/${b.id}/top?limit=100`),
-    get(`/search?q=${encodeURIComponent(`${a.name} ${b.name}`)}&limit=25`),
-    hint ? get(`/search?q=${encodeURIComponent(`${hint} ${b.name}`)}&limit=25`) : Promise.resolve({ data: [] }),
-  ]);
+  //    Les recherches partent tout de suite, mais on n'attend que les tops si le feat y est déjà.
+  const settle = (p) => p.then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
+  const pairP = settle(get(`/search?q=${encodeURIComponent(`${a.name} ${b.name}`)}&limit=25`));
+  const hintedP = settle(hint ? get(`/search?q=${encodeURIComponent(`${hint} ${b.name}`)}&limit=25`) : Promise.resolve({ data: [] }));
+  const [topA, topB] = await Promise.all([settle(get(`/artist/${a.id}/top?limit=100`)), settle(get(`/artist/${b.id}/top?limit=100`))]);
   const data = (r) => (r.status === 'fulfilled' ? r.value.data || [] : []);
   const rankIn = [topA, topB].map((r) => new Map(data(r).map((t, i) => [t.id, i])));
   const isRare = (t) => rankIn.every((m) => !m.has(t.id) || m.get(t.id) >= RARE_RANK);
@@ -220,6 +220,7 @@ async function findFeat(a, b, songHint) {
   const want = (t) => !hint || titleMatches(t, hint);
   const best = provers.find(want);
   if (best) return done(best);
+  const [pair, hinted] = await Promise.all([pairP, hintedP]);
 
   // 2) Premiers résultats des recherches : preuve directe par le titre, sinon détail (liste officielle des artistes).
   const searchHits = dedupe([...data(hinted).slice(0, 8), ...data(pair).slice(0, 8)]);
@@ -237,8 +238,11 @@ async function findFeat(a, b, songHint) {
     return { ...memo, rare: isRare(memo), hinted: false };
   }
 
-  // 3) Fouille profonde (sorties des deux artistes, apparitions « feat. X »).
-  const deep = await findFeatDeep(a, b);
+  // 3) Fouille profonde (sorties, apparitions « feat. X ») : seulement pour les petits artistes. Deezer renvoie un top
+  //    presque complet pour les gros artistes, et la recherche « A B » couvre déjà leurs feats ; c'est chez les petits
+  //    (top de quelques sons, invités crédités sans « feat » dans le titre) que les feats se cachent.
+  const small = [[a, topA], [b, topB]].filter(([, t]) => data(t).length < SMALL_TOP).map(([x]) => x);
+  const deep = small.length ? await findFeatDeep(a, b, () => true, small) : null;
   if (deep) return done(deep);
   if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
   return null;
@@ -246,10 +250,15 @@ async function findFeat(a, b, songHint) {
 
 // Étape 3 : sorties (albums, EP, singles) des deux artistes et apparitions « feat. X ».
 // `want` (facultatif) impose une condition sur le son trouvé.
-async function findFeatDeep(a, b, want = () => true) {
+async function findFeatDeep(a, b, want = () => true, only = [a, b]) {
   const ok = (t) => proves(t, a, b) && want(t);
+  const scan = (x) => only.some((o) => o.id === x.id);
+  const none = Promise.resolve([]);
   try {
-    const [ta, tb, ga, gb] = await Promise.all([albumTracks(a), albumTracks(b), guestTracks(a), guestTracks(b)]);
+    const [ta, tb, ga, gb] = await Promise.all([
+      scan(a) ? albumTracks(a) : none, scan(b) ? albumTracks(b) : none,
+      scan(a) ? guestTracks(a) : none, scan(b) ? guestTracks(b) : none,
+    ]);
     // Feat écrit dans le titre : prouvé sans appel de plus.
     const direct = dedupe([...tb, ...ta, ...gb, ...ga]).find(ok);
     if (direct) return (await getTrack(direct.id).catch(() => null)) || direct;
@@ -257,10 +266,10 @@ async function findFeatDeep(a, b, want = () => true) {
     // à part entière sans rien écrire dans le titre (ex. « CAUCHEMAR » : Vadek, EDGE, Demas).
     // Le plus petit catalogue d'abord (c'est là que le son a le plus de chances d'être), arrêt dès que c'est prouvé.
     const ua = featFirst(uniqueByTitle(ta)), ub = featFirst(uniqueByTitle(tb));
-    const lists = ua.length <= ub.length ? [ua, ub] : [ub, ua];
+    const lists = (ua.length <= ub.length ? [ua, ub] : [ub, ua]).filter((l) => l.length);
     for (const [k, list] of lists.entries()) {
-      if (k === 1 && list.length > 80) break; // gros catalogue : déjà couvert par son top et la recherche
-      const det = await detailInBatches(list, (got) => got.some(ok), 60);
+      if (k === 1 && list.length > 60) break; // gros catalogue : déjà couvert par son top et la recherche
+      const det = await detailInBatches(list, (got) => got.some(ok), 40);
       const hit = det.find(ok);
       if (hit) return hit;
     }
