@@ -59,7 +59,7 @@ app.get('/health', (_, res) => res.send('ok'));
 // TEMPORAIRE : compare l'ancienne et la nouvelle recherche sur les vrais catalogues Deezer, cache vide. À retirer.
 const benchRuns = new Map();
 app.get('/api/diag-bench', (req, res) => {
-  const key = String(req.query.k || 'x');
+  const key = String(req.query.k || 'x').split('.')[0];
   if (!benchRuns.has(key)) {
     const run = { status: 'en cours', lignes: [] };
     benchRuns.set(key, run);
