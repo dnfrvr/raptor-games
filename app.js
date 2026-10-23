@@ -405,7 +405,7 @@
       $('#chainTitle').textContent = r.chain.length ? `La chaîne, ${plural(n, 'feat')}` : 'La chaîne';
       $('#chain').innerHTML = r.chain.length ? r.chain.map((l, i) => {
         const who = esc(S.players[l.by]?.name || '');
-        const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">⭐ rare</span>' : '') + (l.joker ? ' <span class="tag">🃏 joker</span>' : '');
+        const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">⭐ Rare</span>' : '') + (l.joker ? ' <span class="tag">🃏 Joker</span>' : '');
         const detail = (i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
