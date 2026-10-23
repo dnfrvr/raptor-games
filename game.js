@@ -174,9 +174,21 @@ class Room {
     const len = r.chain.length;
     const cur = this.current();
     if (!cur || !cur.id || r.ko) return;
-    let options;
-    try { options = (await deezer.findCollaborators(cur, 100)).filter((o) => !this.usedArtist(o.artist)); } catch (e) { return; }
-    if (this.round !== r || this.phase !== 'playing' || r.chain.length !== len || options.length) return;
+    const isUsed = (x) => this.usedArtist(x);
+    const stale = () => this.round !== r || this.phase !== 'playing' || r.chain.length !== len;
+    let top;
+    try { top = (await deezer.findCollaborators(cur, 100)).filter((o) => !isUsed(o.artist)); } catch (e) { return; }
+    if (stale() || top.length) return;
+    // Rien dans les sons les plus écoutés : avant de déclarer le K.O., fouille profonde (albums, apparitions).
+    // Chrono en pause pendant la vérification, pour ne pas pénaliser le joueur.
+    r.checking = { verifying: true, artist: { name: cur.name } };
+    this.pauseClock();
+    this.broadcast();
+    let deep = [];
+    try { deep = await deezer.findCollaboratorsDeep(cur, isUsed); } catch (e) { deep = [{}]; } // Deezer en panne : pas de K.O. par erreur
+    if (stale()) return;
+    r.checking = false;
+    if (deep.length) { this.startClock(); return this.broadcast(); }
     r.ko = { id: Date.now(), by: r.chain[len - 1].by, artist: { id: cur.id, name: cur.name } };
     this.koVictim();
   }
@@ -295,9 +307,9 @@ class Room {
     const a = r.lastOut && r.lastOut.onArtist;
     if (!a || !a.id) return;
     try {
-      const list = await deezer.findCollaborators(a, 100);
+      const list = await deezer.findCollaboratorsDeep(a, (x) => this.usedArtist(x));
       if (this.round !== r) return;
-      r.examples = list.filter((o) => !this.usedArtist(o.artist)).slice(0, 3).map((o) => ({
+      r.examples = list.slice(0, 3).map((o) => ({
         artist: { id: o.artist.id, name: o.artist.name },
         track: { title: o.track.title, preview: o.track.preview, link: o.track.link },
       }));
@@ -395,7 +407,10 @@ class Room {
     this.pauseClock();
     this.broadcast();
     let options = [];
-    try { options = (await deezer.findCollaborators(this.current(), 100)).filter((o) => !this.usedArtist(o.artist)); } catch (e) { console.error('joker', e.message); }
+    try {
+      // Les sons les plus écoutés d'abord, puis la fouille profonde s'ils ne suffisent pas. On garde les artistes identifiés.
+      options = (await deezer.findCollaboratorsDeep(this.current(), (x) => this.usedArtist(x))).filter((o) => o.artist.id);
+    } catch (e) { console.error('joker', e.message); }
     if (this.round !== r || this.phase !== 'playing' || r.turn !== i) return;
     r.checking = false;
     if (!options.length) {

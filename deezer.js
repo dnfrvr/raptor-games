@@ -228,22 +228,17 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
     if (d.status === 'fulfilled' && ok(d.value)) return d.value;
   }
 
-  // 3) Dernier recours : les albums de l'artiste le plus "petit" (featurings hors top).
+  // 3) Fouille profonde : albums, EP et singles récents des deux artistes, et leurs apparitions « feat. X » chez d'autres.
+  //    On lit d'abord les titres (peu coûteux) ; on ne demande le détail que des sons qui ressemblent à des feats.
   try {
-    const albums = await get(`/artist/${b.id}/albums?limit=25`);
-    const ids = (albums.data || []).slice(0, 12).map((al) => al.id);
-    const albs = await Promise.allSettled(ids.map((id) => get(`/album/${id}/tracks?limit=60`)));
-    // On ne garde que les sons qui créditent A dans la partie feat du titre, ou qui ont un feat (à vérifier en détail).
-    const strong = [], weak = [];
-    for (const al of albs) {
-      if (al.status !== 'fulfilled') continue;
-      for (const t of al.value.data || []) {
-        const credits = featCredits(t.title).map(norm);
-        if (credits.includes(norm(a.name))) strong.push(t.id);
-        else if (credits.length) weak.push(t.id);
-      }
-    }
-    const det = await Promise.allSettled([...strong, ...weak].slice(0, 18).map((id) => getTrack(id)));
+    const [ta, tb, ga, gb] = await Promise.all([albumTracks(a), albumTracks(b), guestTracks(a), guestTracks(b)]);
+    const all = dedupe([...tb, ...ta, ...gb, ...ga]);
+    // Feat écrit dans le titre : prouvé sans appel de plus.
+    const direct = all.find((t) => ok(t));
+    if (direct) return (await getTrack(direct.id).catch(() => null)) || direct;
+    // Sons marqués « feat » de l'un des deux : on regarde la liste officielle des artistes.
+    const weak = all.filter((t) => featCredits(t.title).length && (matches(t.artist, a) || matches(t.artist, b))).slice(0, 18);
+    const det = await Promise.allSettled(weak.map((t) => getTrack(t.id)));
     for (const d of det) if (d.status === 'fulfilled' && ok(d.value)) return d.value;
   } catch (_) { /* ignore */ }
 
@@ -269,4 +264,84 @@ async function findCollaborators(a, depth = 100) {
   return [...out.values()];
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, featCredits, proves, norm, setFetcher };
+// ---------- Fouille profonde (au-delà des 100 sons les plus écoutés) ----------
+const DEEP_RELEASES = 25; // sorties les plus récentes regardées par artiste
+
+function dedupe(tracks) {
+  const seen = new Set();
+  return tracks.filter((t) => t && !seen.has(t.id) && seen.add(t.id));
+}
+
+// Titres des albums, EP et singles récents d'un artiste (une liste de titres par sortie, sans détail).
+async function albumTracks(a, max = DEEP_RELEASES) {
+  try {
+    const albums = await get(`/artist/${a.id}/albums?limit=100`);
+    const recent = (albums.data || [])
+      .slice()
+      .sort((x, y) => String(y.release_date || '').localeCompare(String(x.release_date || '')))
+      .slice(0, max);
+    const lists = await Promise.allSettled(recent.map((al) => get(`/album/${al.id}/tracks?limit=100`)));
+    return lists.flatMap((l) => (l.status === 'fulfilled' ? l.value.data || [] : []))
+      .map((t) => ({ ...t, artist: t.artist || { id: a.id, name: a.name } }));
+  } catch (_) { return []; }
+}
+
+// Apparitions de l'artiste chez les autres : sons dont le titre le crédite en feat.
+async function guestTracks(a) {
+  const qs = [`feat ${a.name}`, `ft ${a.name}`];
+  const res = await Promise.allSettled(qs.map((q) => get(`/search?q=${encodeURIComponent(q)}&limit=50`)));
+  const n = norm(a.name);
+  return dedupe(res.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : [])))
+    .filter((t) => featCredits(t.title).map(norm).includes(n));
+}
+
+/**
+ * Partenaires de `a` (artistes ayant un son avec lui), en excluant ceux pour qui isUsed(artiste) est vrai.
+ * D'abord les 100 sons les plus écoutés ; s'ils ne donnent plus personne, fouille profonde.
+ * Renvoie [{ artist: { id, name, picture }, track }] (les plus connus d'abord).
+ */
+async function findCollaboratorsDeep(a, isUsed = () => false) {
+  const top = (await findCollaborators(a, 100)).filter((o) => !isUsed(o.artist));
+  if (top.length) return top;
+
+  const [own, guest] = await Promise.all([albumTracks(a), guestTracks(a)]);
+  const tracks = dedupe([...own, ...guest]);
+  const found = new Map(); // nom normalisé → { artist, track }
+  const add = (person, t) => {
+    if (!person || !person.name || matches(person, a)) return;
+    const k = norm(person.name);
+    if (!k || found.has(k) || isUsed(person)) return;
+    found.set(k, { artist: person.id ? artistOut(person) : { id: null, name: person.name, picture: null }, track: trackOut(t) });
+  };
+  // Feats lisibles dans le titre (aucun appel en plus).
+  for (const t of tracks) {
+    const credits = featCredits(t.title);
+    const involved = matches(t.artist, a) || credits.map(norm).includes(norm(a.name));
+    if (!involved) continue;
+    add(t.artist, t);
+    credits.forEach((name) => add({ name }, t));
+  }
+  // Sinon : détail des sons de l'artiste marqués « feat » (artistes crédités par Deezer).
+  if (!found.size) {
+    const weak = own.filter((t) => featCredits(t.title).length).slice(0, 18);
+    const det = await Promise.allSettled(weak.map((t) => getTrack(t.id)));
+    for (const d of det) {
+      if (d.status !== 'fulfilled') continue;
+      const t = d.value;
+      if (!(t.contributors || []).some((p) => matches(p, a))) continue;
+      (t.contributors || []).forEach((p) => add(p, t));
+    }
+  }
+  // Les noms lus seulement dans un titre n'ont pas d'identifiant Deezer : on le retrouve pour les premiers.
+  const list = [...found.values()];
+  await Promise.all(list.slice(0, 5).map(async (o) => {
+    if (o.artist.id) return;
+    try {
+      const hit = (await searchArtists(o.artist.name, 3)).find((x) => norm(x.name) === norm(o.artist.name));
+      if (hit) o.artist = hit;
+    } catch (_) { /* ignore */ }
+  }));
+  return list;
+}
+
+module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, featCredits, proves, norm, setFetcher };

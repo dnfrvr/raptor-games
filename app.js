@@ -382,6 +382,7 @@
       let txt = `<span class="dots">${choosing ? 'Choix en cours' : 'Recherche en cours'}</span>`;
       if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
       else if (r.checking && r.checking.joker) txt = `<span class="spin"></span>${esc(turnName)} utilise un joker 🃏`;
+      else if (r.checking && r.checking.verifying) txt = `<span class="spin"></span>On vérifie qu'il reste des feats avec ${esc(r.checking.artist.name)}…`;
       else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
       const triesTxt = r.tries ? ` Essai ${r.tries} sur ${r.maxTries || 3} raté.` : '';
@@ -455,6 +456,11 @@
 
   function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
+    if (r.checking && r.checking.verifying) {
+      fb.hidden = false; fb.className = 'feedback info';
+      fb.innerHTML = `<span class="spin"></span>On vérifie qu'il reste des feats avec ${esc(r.checking.artist.name)}… Chrono en pause.`;
+      return;
+    }
     if (r.checking && r.checking.joker) {
       fb.hidden = false; fb.className = 'feedback info';
       fb.innerHTML = `<span class="spin"></span>Le joker cherche un rappeur pour toi…`;

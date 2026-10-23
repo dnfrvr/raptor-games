@@ -1,7 +1,7 @@
 // Faux Deezer hors-ligne pour tester le jeu sans réseau : DEEZER_MOCK=1 npm start
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
-  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'],
+  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'], [19, 'Kalash'],
 ].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: 1000000 - id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
@@ -25,6 +25,10 @@ const tracks = [
   [114, 'Face B (feat. Damso)', 'Niska', [], true],
   // Impasse : Huntrill n'a qu'un seul feat (avec Jul). Jul → Huntrill = plus rien à répondre : K.O.
   [115, 'Impasse', 'Jul', ['Huntrill']],
+  // Feat caché hors des tops : Kalash n'a dans son top qu'un son avec Jul, mais il est invité chez Damso.
+  // Jul → Kalash ne doit PAS faire K.O. (la fouille profonde trouve Damso), et Kalash × Damso doit être validé.
+  [116, 'Seul', 'Jul', ['Kalash']],
+  [117, 'Cachée (feat. Kalash)', 'Damso', [], true],
 ].map(([id, title, main, feats, deep]) => ({
   id, title, title_short: title, preview: null, link: '#', deep: !!deep,
   album: { title, cover_medium: null },
