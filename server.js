@@ -90,7 +90,7 @@ app.get('/api/diag-bench', (req, res) => {
       run.status = 'fini';
     })().catch((e) => { run.status = 'erreur ' + e.message; });
   }
-  res.set('Cache-Control', 'no-store').json(benchRuns.get(key));
+  res.set('Cache-Control', 'no-store').json({ uptime: Math.round(process.uptime()), mem: Math.round(process.memoryUsage().rss / 1e6), runs: [...benchRuns.keys()], ...benchRuns.get(key) });
 });
 app.get('/r/:code', sendIndex);
 
