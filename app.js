@@ -715,6 +715,8 @@
   // ================= AUTOCOMPLÉTION =================
   function autocomplete(input, list, onPick) {
     let items = [], sel = -1, timer, seq = 0;
+    // Juste après un choix, on ignore ce que le clavier renvoie (fin de saisie, correction auto) pendant un court instant.
+    let chosen = null, lockUntil = 0;
     const close = () => { list.hidden = true; sel = -1; input.setAttribute('aria-expanded', 'false'); };
     const draw = () => {
       if (!items.length) { list.innerHTML = '<li class="none">Aucun artiste à ce nom sur Deezer</li>'; list.hidden = false; return; }
@@ -725,6 +727,12 @@
       if (sel >= 0) input.setAttribute('aria-activedescendant', 'ac-' + sel);
     };
     input.addEventListener('input', () => {
+      if (Date.now() < lockUntil) {
+        // Le clavier a remis le mot tapé par-dessus le nom choisi : on remet le nom complet, et la liste reste fermée.
+        if (chosen && input.value !== chosen.name) input.value = chosen.name;
+        return;
+      }
+      chosen = null;
       pickedArtist = null;
       clearTimeout(timer);
       const q = input.value.trim();
@@ -746,25 +754,28 @@
       else if (e.key === 'Enter' && sel >= 0 && items[sel]) { e.preventDefault(); choose(items[sel]); }
       else if (e.key === 'Escape') close();
     });
-    // Sélection au doigt ou à la souris. Sur mobile, le clavier peut réécrire le mot en cours de frappe
-    // par-dessus le nom choisi : on termine d'abord la saisie (blur), puis on remplit le nom complet.
-    let picking = false;
-    list.addEventListener('pointerdown', (e) => {
-      const li = e.target.closest('li[data-i]');
-      if (!li) return;
-      e.preventDefault();
-      picking = true;
-      choose(items[Number(li.dataset.i)]);
-    });
+    // Sélection au doigt ou à la souris.
+    // - On garde le champ actif pendant l'appui (sinon la liste se ferme avant que le choix soit pris en compte).
+    // - Le choix se fait au « clic », quand la liste est encore affichée : le toucher ne retombe pas sur le bouton en dessous.
+    let pressing = false;
+    list.addEventListener('pointerdown', (e) => { if (e.target.closest('li[data-i]')) { e.preventDefault(); pressing = true; } });
     list.addEventListener('mousedown', (e) => e.preventDefault());
-    input.addEventListener('blur', () => setTimeout(() => { if (!picking) close(); }, 150));
+    list.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-i]');
+      pressing = false;
+      if (li) { e.preventDefault(); choose(items[Number(li.dataset.i)]); }
+    });
+    input.addEventListener('blur', () => setTimeout(() => { if (!pressing) close(); }, 200));
     function choose(a) {
       if (!a) return;
-      input.blur();
+      // Annule toute recherche en attente : elle rouvrirait la liste juste après.
+      clearTimeout(timer); seq++;
+      chosen = a; lockUntil = Date.now() + 700;
       close();
+      input.blur(); // termine la saisie du clavier (fin de mot, correction auto)
       input.value = a.name;
-      // Certains claviers repassent après coup : on réécrit le nom une fois la saisie bien terminée.
-      setTimeout(() => { input.value = a.name; picking = false; onPick(a); }, 60);
+      // Certains claviers repassent après coup : on réécrit le nom complet une fois la saisie bien terminée.
+      setTimeout(() => { input.value = a.name; close(); onPick(a); }, 80);
     }
   }
   const fmtFans = (n) => !n ? '' : n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '').replace('.', ',') + ' M fans' : n >= 1e3 ? Math.round(n / 1e3) + ' k fans' : n + ' fans';
