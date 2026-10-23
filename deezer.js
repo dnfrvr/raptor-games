@@ -102,11 +102,36 @@ function matches(person, target) {
   return person && (person.id === target.id || (norm(person.name) && norm(person.name) === norm(target.name)));
 }
 
-// Un titre prouve le feat si A et B y figurent tous les deux (contributeurs ou mention "feat." dans le titre).
+/**
+ * Noms crédités dans la partie « feat » d'un titre, et seulement là.
+ * - entre parenthèses ou crochets qui commencent par feat / ft / featuring / with / avec / w/ ;
+ * - hors parenthèses, après feat / ft / featuring (pas « avec » ni « with », trop courants dans les titres).
+ * Chaque crédit est découpé en noms : « Francisco & DJ Abdel » → ["Francisco", "DJ Abdel"].
+ * « Thugfeelings » ne contient aucun crédit : on ne cherche jamais un nom au milieu d'un mot.
+ */
+const FEAT_GROUP = /[([]\s*(?:feat\.?|ft\.?|featuring|with|avec|w\/)\s+([^)\]]+)[)\]]/gi;
+const FEAT_TAIL = /(?:^|\s)(?:feat\.?|ft\.?|featuring)\s+([^([]+)/i;
+function featCredits(title) {
+  title = String(title || '');
+  const parts = [];
+  let m;
+  FEAT_GROUP.lastIndex = 0;
+  while ((m = FEAT_GROUP.exec(title))) parts.push(m[1]);
+  const rest = title.replace(FEAT_GROUP, ' ');
+  if ((m = rest.match(FEAT_TAIL))) parts.push(m[1]);
+  return parts
+    .flatMap((p) => p.split(/\s*(?:,|&|\+|\s(?:x|et|and|feat\.?|ft\.?)\s)\s*/i))
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+// Un son prouve le feat A × B si :
+// - A et B y figurent tous les deux, soit comme artistes crédités par Deezer, soit comme crédit entier dans la partie feat du titre ;
+// - et le son appartient à l'un des deux (artiste principal ou crédité), pour ne pas valider le son d'un inconnu qui les cite.
 function proves(track, a, b) {
   const people = track.contributors && track.contributors.length ? track.contributors : track.artist ? [track.artist] : [];
-  const title = ' ' + norm(track.title) + ' ';
-  const has = (x) => people.some((p) => matches(p, x)) || (norm(x.name).length > 2 && title.includes(' ' + norm(x.name) + ' '));
+  const credits = featCredits(track.title).map(norm);
+  const has = (x) => people.some((p) => matches(p, x)) || credits.includes(norm(x.name));
   return has(a) && has(b) && people.some((p) => matches(p, a) || matches(p, b));
 }
 
@@ -167,16 +192,17 @@ async function findFeat(a, b, songHint) {
     const albums = await get(`/artist/${b.id}/albums?limit=25`);
     const ids = (albums.data || []).slice(0, 12).map((al) => al.id);
     const albs = await Promise.allSettled(ids.map((id) => get(`/album/${id}/tracks?limit=60`)));
-    const hits = [];
+    // On ne garde que les sons qui créditent A dans la partie feat du titre, ou qui ont un feat (à vérifier en détail).
+    const strong = [], weak = [];
     for (const al of albs) {
       if (al.status !== 'fulfilled') continue;
       for (const t of al.value.data || []) {
-        const title = norm(t.title);
-        if (title.includes(norm(a.name))) return trackOut(await getTrack(t.id).catch(() => t));
-        if (/feat|ft|avec|with/.test(title)) hits.push(t.id);
+        const credits = featCredits(t.title).map(norm);
+        if (credits.includes(norm(a.name))) strong.push(t.id);
+        else if (credits.length) weak.push(t.id);
       }
     }
-    const det = await Promise.allSettled(hits.slice(0, 15).map((id) => getTrack(id)));
+    const det = await Promise.allSettled([...strong, ...weak].slice(0, 18).map((id) => getTrack(id)));
     for (const d of det) if (d.status === 'fulfilled' && proves(d.value, a, b)) return trackOut(d.value);
   } catch (_) { /* ignore */ }
 
@@ -202,4 +228,4 @@ async function findCollaborators(a, depth = 100) {
   return [...out.values()];
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, norm, setFetcher };
+module.exports = { searchArtists, getArtist, findFeat, findCollaborators, featCredits, proves, norm, setFetcher };

@@ -147,7 +147,7 @@ class Room {
   eliminate(i, reason) {
     const r = this.round;
     const cur = this.current();
-    r.lastOut = { who: i, reason, on: cur ? cur.name : null };
+    r.lastOut = { who: i, reason, on: cur ? cur.name : null, onArtist: cur ? { id: cur.id, name: cur.name } : null };
     r.out.push(r.lastOut);
     const alive = this.alive();
     if (alive.length <= 1) return this.endRound(alive.length ? alive[0] : this.nextAlive(i), reason);
@@ -201,6 +201,24 @@ class Room {
     if (done) this.final = { stopped: false, winner };
     this.phase = done ? 'finished' : 'roundEnd';
     this.broadcast();
+    this.loadExamples();
+  }
+
+  // Fin de manche : 3 feats qu'on aurait pu citer sur l'artiste où le dernier joueur a séché
+  // (les plus connus d'abord, sans les artistes déjà cités). Affichés seulement maintenant pour ne pas aider les autres.
+  async loadExamples() {
+    const r = this.round;
+    const a = r.lastOut && r.lastOut.onArtist;
+    if (!a || !a.id) return;
+    try {
+      const list = await deezer.findCollaborators(a, 100);
+      if (this.round !== r) return;
+      r.examples = list.filter((o) => !this.usedArtist(o.artist)).slice(0, 3).map((o) => ({
+        artist: { id: o.artist.id, name: o.artist.name },
+        track: { title: o.track.title, preview: o.track.preview, link: o.track.link },
+      }));
+      if (r.examples.length) this.broadcast();
+    } catch (e) { console.error('examples', e.message); }
   }
 
   usedArtist(a) {
@@ -226,7 +244,7 @@ class Room {
     const used = new Set(this.history.map((h) => h.start && deezer.norm(h.start.name)));
     const pool = [...new Set(FR_RAPPERS)].filter((n) => !used.has(deezer.norm(n)));
     let found = null;
-    for (let tries = 0; tries < 4 && !found; tries++) {
+    for (let tries = 0; tries < 8 && !found; tries++) {
       const name = pool[Math.floor(Math.random() * pool.length)] || 'Ninho';
       try {
         const res = await deezer.searchArtists(name, 5);

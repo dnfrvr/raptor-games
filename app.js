@@ -269,7 +269,12 @@
     const redraw = newLink || mask !== lastMask;
     lastMask = mask;
     const known = new Set(r.chain.map((l) => nrm(l.artist.name)));
-    const others = (t) => (mask && t ? (t.artists || []).filter((n) => !known.has(nrm(n))) : []);
+    // À cacher : les artistes crédités sur le son ET les noms écrits dans la partie feat du titre, sauf ceux déjà dans la chaîne.
+    const others = (t) => {
+      if (!mask || !t) return [];
+      const names = [...(t.artists || []), ...featCredits(t.title)].filter((n) => !known.has(nrm(n)));
+      return [...new Set(names)];
+    };
     const myTurn = playing && r.turn === S.me;
     const turnName = S.players[r.turn]?.name || '';
     const busy = !!r.checking || !!r.appeal;
@@ -463,6 +468,18 @@
       ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
       : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
 
+    // Feats qu'on aurait pu citer (chargés juste après la fin de manche).
+    const ex = $('#endExamples');
+    const exKey = JSON.stringify(r.examples || []);
+    if (ex.dataset.key !== exKey) {
+      ex.dataset.key = exKey;
+      ex.hidden = !(r.examples && r.examples.length);
+      if (!ex.hidden) {
+        ex.innerHTML = `<p>Il y avait par exemple :</p><ul>${r.examples.map((e) => `<li><b>${esc(e.artist.name)}</b><span>« ${esc(e.track.title)} »</span>${e.track.preview ? `<button type="button" class="play-btn" data-prev="${esc(e.track.preview)}" aria-label="Écouter « ${esc(e.track.title)} »">▶</button>` : ''}</li>`).join('')}</ul>`;
+        bindTracks();
+      }
+    }
+
     const btn = $('#endBtn');
     btn.hidden = false;
     if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => socket.emit('start'); }
@@ -482,12 +499,32 @@
   // Remplace les noms à cacher par un bloc flouté. Le vrai nom n'est jamais mis dans la page, donc impossible à lire en trichant.
   const nrm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const hid = (n) => `<span class="hid" aria-label="artiste masqué">${'x'.repeat(Math.min(Math.max(n, 4), 12))}</span>`;
+  // Même découpage que le serveur : les noms crédités dans la partie « feat » du titre.
+  const FEAT_GROUP = /[([]\s*(?:feat\.?|ft\.?|featuring|with|avec|w\/)\s+([^)\]]+)[)\]]/gi;
+  const FEAT_TAIL = /(?:^|\s)(?:feat\.?|ft\.?|featuring)\s+([^([]+)/i;
+  function featCredits(title) {
+    title = String(title || '');
+    const parts = [];
+    let m;
+    FEAT_GROUP.lastIndex = 0;
+    while ((m = FEAT_GROUP.exec(title))) parts.push(m[1]);
+    const rest = title.replace(FEAT_GROUP, ' ');
+    if ((m = rest.match(FEAT_TAIL))) parts.push(m[1]);
+    return parts.flatMap((p) => p.split(/\s*(?:,|&|\+|\s(?:x|et|and|feat\.?|ft\.?)\s)\s*/i)).map((n) => n.trim()).filter(Boolean);
+  }
+  // Remplace chaque nom à cacher, seulement en mot entier (jamais « th » au milieu de « Truth »).
   function masked(text, hide) {
     text = String(text || '');
     if (!hide.length) return esc(text);
-    const re = new RegExp(hide.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+    const alt = hide.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((x, y) => y.length - x.length).join('|');
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${alt})(?=$|[^\\p{L}\\p{N}])`, 'giu');
     let out = '', at = 0;
-    text.replace(re, (m, off) => { out += esc(text.slice(at, off)) + hid(m.length); at = off + m.length; return m; });
+    text.replace(re, (m, pre, name, off) => {
+      const start = off + pre.length;
+      out += esc(text.slice(at, start)) + hid(name.length);
+      at = start + name.length;
+      return m;
+    });
     return out + esc(text.slice(at));
   }
   function trackInline(t, hide = []) {

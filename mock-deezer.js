@@ -1,7 +1,7 @@
 // Faux Deezer hors-ligne pour tester le jeu sans réseau : DEEZER_MOCK=1 npm start
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
-  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'],
+  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'],
 ].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: 1000000 - id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
@@ -15,6 +15,12 @@ const tracks = [
   [108, 'Mamacita', 'Tiakola', ['Gims']],
   [109, 'Sans moi', 'SCH', ['Ninho']],
   [110, 'Ma vie (feat. Francisco)', 'Mister You', ['DJ Abdel', 'Francisco']],
+  // Piège : « th » au milieu d'un mot, ce n'est pas un feat avec TH.
+  [111, 'Thugfeelings', 'Huntrill', []],
+  // Feat écrit seulement dans le titre (TH n'est pas crédité par Deezer).
+  [112, 'Tchikita (feat. TH)', 'Jul', []],
+  // Francisco écrit seulement dans le titre (pas crédité) : doit être flouté pendant la manche.
+  [113, 'Club (feat. Francisco)', 'Naps', ['Gims']],
 ].map(([id, title, main, feats]) => ({
   id, title, title_short: title, preview: null, link: '#',
   album: { title, cover_medium: null },
@@ -29,7 +35,8 @@ function route(path) {
   let m;
   if (u.pathname === '/search/artist') return { data: artists.filter((a) => a.name.toLowerCase().includes(q.trim())) };
   if ((m = u.pathname.match(/^\/artist\/(\d+)\/top$/))) return { data: tracks.filter((t) => t.contributors.some((c) => c.id === +m[1])) };
-  if ((m = u.pathname.match(/^\/artist\/(\d+)\/albums$/))) return { data: [] };
+  if ((m = u.pathname.match(/^\/artist\/(\d+)\/albums$/))) return { data: [{ id: 9000 + +m[1] }] };
+  if ((m = u.pathname.match(/^\/album\/9(\d{3})\/tracks$/))) return { data: tracks.filter((t) => t.artist.id === +m[1]).map(({ contributors, ...t }) => t) };
   if ((m = u.pathname.match(/^\/artist\/(\d+)$/))) return artists.find((a) => a.id === +m[1]);
   if ((m = u.pathname.match(/^\/track\/(\d+)$/))) return tracks.find((t) => t.id === +m[1]);
   if (u.pathname === '/search') return { data: tracks.filter((t) => words.some((w) => (t.title + ' ' + t.artist.name).toLowerCase().includes(w))).map(({ contributors, ...t }) => t) };
