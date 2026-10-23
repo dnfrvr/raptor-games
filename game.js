@@ -176,6 +176,15 @@ class Room {
     if (!cur || !cur.id || r.ko) return;
     const isUsed = (x) => this.usedArtist(x);
     const stale = () => this.round !== r || this.phase !== 'playing' || r.chain.length !== len;
+    // D'abord le son qui vient d'être joué : il contient l'artiste en jeu. S'il a un autre artiste pas encore cité
+    // (dans la liste officielle Deezer du son ou écrit dans le titre), il y a forcément une réponse possible.
+    // Ce son peut appartenir à quelqu'un d'autre (invités) et donc n'apparaître ni dans le top ni dans les albums de l'artiste.
+    const last = r.chain[len - 1];
+    if (last && last.track) {
+      const names = await deezer.trackArtists(last.track);
+      if (stale()) return;
+      if (names.some((n) => deezer.norm(n) !== deezer.norm(cur.name) && !isUsed({ name: n }))) return;
+    }
     let top;
     try { top = (await deezer.findCollaborators(cur, 100)).filter((o) => !isUsed(o.artist)); } catch (e) { return; }
     if (stale() || top.length) return;
@@ -318,7 +327,7 @@ class Room {
   }
 
   usedArtist(a) {
-    return this.round.chain.some((l) => l.artist.id === a.id || deezer.norm(l.artist.name) === deezer.norm(a.name));
+    return this.round.chain.some((l) => (a.id && l.artist.id === a.id) || deezer.norm(l.artist.name) === deezer.norm(a.name));
   }
 
   setStart(a, random) {
@@ -379,7 +388,14 @@ class Room {
     let track = null;
     let failed = false;
     try {
-      track = await deezer.findFeat(cur, a, attempt.song);
+      // Le son qui vient d'être joué contient l'artiste en jeu : s'il contient aussi l'artiste proposé, c'est la preuve
+      // (utile quand ce son appartient à un troisième artiste, invisible côté des deux autres).
+      const last = r.chain[r.chain.length - 1];
+      if (last && last.track && last.track.id) {
+        const names = await deezer.trackArtists(last.track);
+        if (names.some((n) => deezer.norm(n) === deezer.norm(a.name))) track = { ...last.track, rare: false, hinted: false };
+      }
+      if (!track) track = await deezer.findFeat(cur, a, attempt.song);
     } catch (e) {
       console.error('findFeat', e.message);
       failed = true;
@@ -580,7 +596,7 @@ class Room {
     const n = r.chain.length;
     let options = [];
     try {
-      options = (await deezer.findCollaborators(this.current(), lvl.depth)).filter((o) => !this.usedArtist(o.artist));
+      options = (await deezer.findCollaborators(this.current(), lvl.depth)).filter((o) => o.artist.id && !this.usedArtist(o.artist));
     } catch (e) { console.error('bot', e.message); }
     if (this.round !== r || this.phase !== 'playing' || r.turn !== b) return;
     const dries = Math.random() < Math.min(0.9, lvl.dry + lvl.dryStep * n);

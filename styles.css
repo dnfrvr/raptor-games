@@ -394,7 +394,7 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
   background: repeating-conic-gradient(from 0deg, #ffd21f22 0deg 7deg, transparent 7deg 18deg, #d90b2c1f 18deg 24deg, transparent 24deg 36deg); }
 .ko-inner { position: relative; text-align: center; width: 100%; max-width: 440px; }
 .ko-word { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(120px, 44vw, 230px); line-height: .85; letter-spacing: -.02em; display: flex; justify-content: center; }
-.ko-word span { display: inline-block; color: var(--yellow); -webkit-text-stroke: 6px #050b20; paint-order: stroke fill;
+.ko-word span { display: inline-block; color: var(--yellow);
   text-shadow: 0 8px 0 var(--red), 0 16px 0 #050b20, 0 0 40px #ffd21f88; }
 .ko-word span:nth-child(even) { color: var(--red); text-shadow: 0 8px 0 var(--yellow-edge), 0 16px 0 #050b20; }
 .ko-sub { margin: 18px 0 0; font-size: 17px; color: var(--paper); opacity: 0; }

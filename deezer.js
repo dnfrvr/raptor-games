@@ -252,14 +252,20 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
  */
 async function findCollaborators(a, depth = 100) {
   const top = await get(`/artist/${a.id}/top?limit=${depth}`);
-  const out = new Map();
+  const out = new Map(); // nom normalisé → { artist, track }
+  const add = (person, t) => {
+    const k = norm(person.name);
+    if (!k || matches(person, a) || out.has(k)) return;
+    out.set(k, { artist: person.id ? artistOut(person) : { id: null, name: person.name, picture: null }, track: trackOut(t) });
+  };
   for (const t of top.data || []) {
-    const people = t.contributors && t.contributors.length ? t.contributors : [];
-    if (!people.some((p) => matches(p, a))) continue;
-    for (const p of people) {
-      if (matches(p, a) || !p.id || out.has(p.id)) continue;
-      out.set(p.id, { artist: artistOut(p), track: trackOut(t) });
-    }
+    const people = t.contributors && t.contributors.length ? t.contributors : t.artist ? [t.artist] : [];
+    const credits = featCredits(t.title);
+    const involved = people.some((p) => matches(p, a)) || credits.map(norm).includes(norm(a.name));
+    if (!involved) continue;
+    // Artistes crédités par Deezer, puis ceux écrits seulement dans le titre (« feat. Demas »).
+    people.forEach((p) => p.id && add(p, t));
+    credits.forEach((name) => add({ name }, t));
   }
   return [...out.values()];
 }
@@ -344,4 +350,19 @@ async function findCollaboratorsDeep(a, isUsed = () => false) {
   return list;
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, featCredits, proves, norm, setFetcher };
+// Tous les artistes d'un son : liste officielle Deezer (détail du son) + noms écrits dans la partie feat du titre.
+async function trackArtists(track) {
+  const names = [...(track.artists || []), ...featCredits(track.fullTitle || track.title), ...featCredits(track.title)];
+  if (track.id) {
+    try {
+      const t = await getTrack(track.id);
+      (t.contributors || []).forEach((c) => names.push(c.name));
+      if (t.artist) names.push(t.artist.name);
+      featCredits(t.title).forEach((n) => names.push(n));
+    } catch (_) { /* on garde ce qu'on a */ }
+  }
+  const seen = new Set();
+  return names.filter((n) => n && !seen.has(norm(n)) && seen.add(norm(n)));
+}
+
+module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

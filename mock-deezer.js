@@ -1,7 +1,7 @@
 // Faux Deezer hors-ligne pour tester le jeu sans réseau : DEEZER_MOCK=1 npm start
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
-  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'], [19, 'Kalash'],
+  [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'], [19, 'Kalash'], [20, 'Vadek'], [21, 'Edge'], [22, 'Demas'], [23, 'Kekra'],
 ].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: 1000000 - id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
@@ -29,6 +29,11 @@ const tracks = [
   // Jul → Kalash ne doit PAS faire K.O. (la fouille profonde trouve Damso), et Kalash × Damso doit être validé.
   [116, 'Seul', 'Jul', ['Kalash']],
   [117, 'Cachée (feat. Kalash)', 'Damso', [], true],
+  // Cas réel signalé : son d'Edge avec Vadek et Demas crédités par Deezer (rien dans le titre),
+  // absent du top de Vadek. Edge → Vadek ne doit PAS faire K.O. : on peut encore répondre Demas.
+  [118, 'Trio', 'Edge', ['Vadek', 'Demas'], true],
+  // Variante : l'invité n'est écrit que dans le titre.
+  [119, 'Duo (feat. Kekra)', 'Naps', ['Tiakola']],
 ].map(([id, title, main, feats, deep]) => ({
   id, title, title_short: title, preview: null, link: '#', deep: !!deep,
   album: { title, cover_medium: id === 110 ? 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22%3E%3Crect width=%2246%22 height=%2246%22 fill=%22%23d90b2c%22/%3E%3Ctext x=%224%22 y=%2228%22 font-size=%2212%22 fill=%22white%22%3EFRANCISCO%3C/text%3E%3C/svg%3E' : null },
