@@ -258,8 +258,8 @@
     const sb = $('#scorebug');
     sb.classList.toggle('multi', n > 2);
     sb.innerHTML = n <= 2
-      ? `<div class="side" data-p="0"><span class="pname"></span><span class="pscore"></span></div>${CLOCK}<div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>`
-      : `${CLOCK}<ol class="roster">${Array.from({ length: n }, (_, i) => `<li class="pl p${i}" data-p="${i}"><span class="pname"></span><span class="pscore"></span></li>`).join('')}</ol>`;
+      ? [0, 1].map((i) => `<div class="side" data-p="${i}"><span class="pinfo"><span class="pname"></span><span class="pj"></span></span><span class="pscore"></span></div>`).join(CLOCK)
+      : `${CLOCK}<ol class="roster">${Array.from({ length: n }, (_, i) => `<li class="pl p${i}" data-p="${i}"><span class="pinfo"><span class="pname"></span><span class="pj"></span></span><span class="pscore"></span></li>`).join('')}</ol>`;
   }
 
   function renderGame() {
@@ -273,7 +273,12 @@
     document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
       const i = Number(el.dataset.p);
       const p = S.players[i] || { name: '—', score: 0, online: false };
-      el.querySelector('.pname').textContent = p.name + (p.jokers ? ` 🃏${p.jokers}` : '');
+      el.querySelector('.pname').textContent = p.name;
+      // Compteur de jokers de chaque joueur, toujours affiché (grisé à 0).
+      const pj = el.querySelector('.pj');
+      pj.textContent = `🃏 ${p.jokers || 0}`;
+      pj.classList.toggle('zero', !p.jokers);
+      pj.setAttribute('aria-label', `${p.jokers || 0} joker${p.jokers > 1 ? 's' : ''}`);
       el.querySelector('.pscore').textContent = p.score;
       el.classList.toggle('active', !!r && S.phase === 'playing' && r.turn === i);
       el.classList.toggle('off', !p.online);

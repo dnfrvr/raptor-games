@@ -361,3 +361,22 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 /* Ouvert depuis l'écran d'accueil (plein écran) : on laisse la place à l'encoche et à la barre d'état */
 .screen { padding-top: calc(16px + env(safe-area-inset-top)); }
 .scorebug { top: calc(8px + env(safe-area-inset-top)); }
+
+/* Compteur en haut : pseudo plus petit pour qu'il tienne, compteur de jokers en dessous */
+.pinfo { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.scorebug .side[data-p="1"] .pinfo { align-items: flex-end; }
+.pname { font-size: 14px; max-width: 100%; }
+.pj { font-family: var(--text); font-size: 12px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.pj.zero { opacity: .45; }
+.roster .pl { gap: 8px; }
+.roster .pl .pname { font-size: 13px; max-width: 11ch; }
+.roster .pl .pj { font-size: 11px; }
+/* Pseudos longs : un peu plus petits, sur deux lignes à deux joueurs plutôt que coupés */
+.scorebug .side .pname { font-size: 13px; line-height: 1.05; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.scorebug .side .pscore { font-size: 26px; }
+.scorebug .side[data-p="1"] .pname { text-align: right; }
+.roster .pl .pname { font-size: 12px; max-width: 14ch; }
+.scorebug .side .pname { line-height: 1.22; }
+.scorebug .side.me .pname { text-decoration-thickness: 2px; text-underline-offset: 2px; }
+/* Pas de soulignage sur son propre pseudo : la couleur suffit */
+.scorebug .side.me .pname, .roster .pl.me .pname { text-decoration: none; }
