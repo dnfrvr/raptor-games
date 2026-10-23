@@ -31,7 +31,7 @@ const tracks = [
   [117, 'Cachée (feat. Kalash)', 'Damso', [], true],
 ].map(([id, title, main, feats, deep]) => ({
   id, title, title_short: title, preview: null, link: '#', deep: !!deep,
-  album: { title, cover_medium: null },
+  album: { title, cover_medium: id === 110 ? 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22%3E%3Crect width=%2246%22 height=%2246%22 fill=%22%23d90b2c%22/%3E%3Ctext x=%224%22 y=%2228%22 font-size=%2212%22 fill=%22white%22%3EFRANCISCO%3C/text%3E%3C/svg%3E' : null },
   artist: A(main),
   contributors: [{ ...A(main), role: 'Main' }, ...feats.map((f) => ({ ...A(f), role: 'Featured' }))],
 }));

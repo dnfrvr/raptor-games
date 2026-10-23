@@ -697,7 +697,8 @@
     return `<span class="ti">« ${masked(t.title, hide)} »</span>${btn}`;
   }
   function trackCard(t, byAppeal, hide = []) {
-    const cover = t.cover ? `<img src="${esc(t.cover)}" alt="">` : '<span class="nocover" aria-hidden="true"></span>';
+    // Pochette floutée tant que des artistes du son sont cachés : on pourrait y lire leur nom.
+    const cover = t.cover ? `<img src="${esc(t.cover)}" alt=""${hide.length ? ' class="veiled"' : ''}>` : '<span class="nocover" aria-hidden="true"></span>';
     const names = (t.artists || []).map((n) => (hide.includes(n) ? hid(n.length) : esc(n))).join(', ');
     const sub = byAppeal ? '<span class="badge">Validé à la main</span>' : `<span>${names}</span>`;
     const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
@@ -826,22 +827,39 @@
   setInterval(tickClock, 200);
 
   // ================= AUTOCOMPLÉTION =================
+  // Liste de suggestions d'artistes.
+  // Règles pour que le toucher soit fiable sur téléphone :
+  // - la liste ne se redessine JAMAIS pendant qu'un doigt est posé dessus (les nouveaux résultats attendent) ;
+  // - on mémorise l'artiste touché au moment où le doigt se pose (par son identité, pas par sa position) ;
+  // - le choix se fait au lever du doigt, s'il n'a pas glissé (sinon c'était un défilement) ;
+  // - le « clic » fantôme qui suit est bloqué, pour ne pas toucher le bouton qui apparaît dessous.
+  let ghostUntil = 0;
+  document.addEventListener('click', (e) => { if (Date.now() < ghostUntil) { e.preventDefault(); e.stopPropagation(); } }, true);
+
   function autocomplete(input, list, onPick) {
-    let items = [], sel = -1, timer, seq = 0;
-    // Juste après un choix, on ignore ce que le clavier renvoie (fin de saisie, correction auto) pendant un court instant.
+    let items = [], sel = -1, timer = null, seq = 0;
+    let press = null;        // { artist, x, y, li } pendant qu'un doigt est posé
+    let pending = null;      // résultats arrivés pendant l'appui, affichés au lever du doigt
     let chosen = null, lockUntil = 0;
-    const close = () => { list.hidden = true; sel = -1; input.setAttribute('aria-expanded', 'false'); };
+    const used = () => new Set((S?.round?.chain || []).map((l) => l.artist.id));
+    const close = () => { list.hidden = true; sel = -1; press = null; pending = null; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); };
     const draw = () => {
+      if (press) return; // jamais sous le doigt
       if (!items.length) { list.innerHTML = '<li class="none">Aucun artiste à ce nom sur Deezer</li>'; list.hidden = false; return; }
-      const used = new Set((S?.round?.chain || []).map((l) => l.artist.id));
-      list.innerHTML = items.map((a, i) => `<li role="option" id="ac-${i}" data-i="${i}" aria-selected="${i === sel}" class="${used.has(a.id) ? 'used' : ''}">${a.picture ? `<img src="${esc(a.picture)}" alt="">` : '<span class="ph"></span>'}<span class="nm">${esc(a.name)}</span>${used.has(a.id) ? '<span class="fans">déjà cité</span>' : `<span class="fans">${fmtFans(a.fans)}</span>`}</li>`).join('');
+      const u = used();
+      list.innerHTML = items.map((a, i) => `<li role="option" id="ac-${i}" data-i="${i}" aria-selected="${i === sel}" class="${u.has(a.id) ? 'used' : ''}">${a.picture ? `<img src="${esc(a.picture)}" alt="">` : '<span class="ph"></span>'}<span class="nm">${esc(a.name)}</span>${u.has(a.id) ? '<span class="fans">déjà cité</span>' : `<span class="fans">${fmtFans(a.fans)}</span>`}</li>`).join('');
       list.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       if (sel >= 0) input.setAttribute('aria-activedescendant', 'ac-' + sel);
     };
+    const show = (data) => {
+      if (press) { pending = data; return; }
+      items = data; sel = items.length ? 0 : -1; draw();
+    };
+
     input.addEventListener('input', () => {
       if (Date.now() < lockUntil) {
-        // Le clavier a remis le mot tapé par-dessus le nom choisi : on remet le nom complet, et la liste reste fermée.
+        // Le clavier a remis le mot tapé par-dessus le nom choisi : on remet le nom complet, la liste reste fermée.
         if (chosen && input.value !== chosen.name) input.value = chosen.name;
         return;
       }
@@ -849,15 +867,16 @@
       pickedArtist = null;
       clearTimeout(timer);
       const q = input.value.trim();
-      if (q.length < 2) return close();
+      if (q.length < 2) { seq++; return close(); }
+      const my = ++seq;
       timer = setTimeout(async () => {
-        const my = ++seq;
         try {
           const res = await fetch('/api/artists?q=' + encodeURIComponent(q));
           const data = await res.json();
-          if (my !== seq) return;
-          items = Array.isArray(data) ? data : []; sel = items.length ? 0 : -1; draw();
-        } catch { close(); }
+          // Résultat périmé (on a tapé autre chose depuis, ou déjà choisi) : ignoré.
+          if (my !== seq || input.value.trim() !== q || Date.now() < lockUntil) return;
+          show(Array.isArray(data) ? data : []);
+        } catch { if (my === seq) close(); }
       }, 200);
     });
     input.addEventListener('keydown', (e) => {
@@ -867,27 +886,38 @@
       else if (e.key === 'Enter' && sel >= 0 && items[sel]) { e.preventDefault(); choose(items[sel]); }
       else if (e.key === 'Escape') close();
     });
-    // Sélection au doigt ou à la souris.
-    // - On garde le champ actif pendant l'appui (sinon la liste se ferme avant que le choix soit pris en compte).
-    // - Le choix se fait au « clic », quand la liste est encore affichée : le toucher ne retombe pas sur le bouton en dessous.
-    let pressing = false;
-    list.addEventListener('pointerdown', (e) => { if (e.target.closest('li[data-i]')) { e.preventDefault(); pressing = true; } });
-    list.addEventListener('mousedown', (e) => e.preventDefault());
-    list.addEventListener('click', (e) => {
+
+    list.addEventListener('pointerdown', (e) => {
       const li = e.target.closest('li[data-i]');
-      pressing = false;
-      if (li) { e.preventDefault(); choose(items[Number(li.dataset.i)]); }
+      if (!li) return;
+      e.preventDefault(); // garde le champ actif : la liste ne se ferme pas pendant l'appui
+      press = { artist: items[Number(li.dataset.i)], x: e.clientX, y: e.clientY, li };
+      li.classList.add('pressed');
     });
-    input.addEventListener('blur', () => setTimeout(() => { if (!pressing) close(); }, 200));
+    list.addEventListener('pointermove', (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) release(false); // c'est un défilement
+    });
+    list.addEventListener('pointerup', () => release(true));
+    list.addEventListener('pointercancel', () => release(false));
+    list.addEventListener('pointerleave', () => { if (press) release(false); });
+    list.addEventListener('mousedown', (e) => e.preventDefault());
+    function release(pick) {
+      if (!press) return;
+      const p = press;
+      press = null;
+      p.li.classList.remove('pressed');
+      if (pick && p.artist) { ghostUntil = Date.now() + 350; return choose(p.artist); }
+      if (pending) { const d = pending; pending = null; show(d); }
+    }
+    input.addEventListener('blur', () => setTimeout(() => { if (!press) close(); }, 200));
+
     function choose(a) {
       if (!a) return;
-      // Annule toute recherche en attente : elle rouvrirait la liste juste après.
-      clearTimeout(timer); seq++;
+      clearTimeout(timer); seq++;          // annule toute recherche en attente ou en cours
       chosen = a; lockUntil = Date.now() + 700;
       close();
-      input.blur(); // termine la saisie du clavier (fin de mot, correction auto)
+      input.blur();                         // termine la saisie du clavier (fin de mot, correction auto)
       input.value = a.name;
-      // Certains claviers repassent après coup : on réécrit le nom complet une fois la saisie bien terminée.
       setTimeout(() => { input.value = a.name; close(); onPick(a); }, 80);
     }
   }

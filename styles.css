@@ -447,3 +447,9 @@ body.ko-open .reacts { visibility: hidden; }
 #codeInput::placeholder { font-family: var(--text); font-size: 16px; letter-spacing: 0; text-transform: none; }
 .joincode .btn { flex: none; }
 .codemsg { margin-top: 10px; color: #ffd9c2; }
+
+/* Pochette floutée tant que des artistes du son sont cachés */
+.track img.veiled { filter: blur(6px) saturate(.8); }
+.track img { transition: filter .3s; }
+/* Retour visuel immédiat sur l'artiste touché dans la liste */
+.ac-list li.pressed { background: #ffe57a; }
