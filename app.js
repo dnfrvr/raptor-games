@@ -536,7 +536,7 @@
       ex.dataset.key = exKey;
       ex.hidden = !(r.examples && r.examples.length);
       if (!ex.hidden) {
-        ex.innerHTML = `<p>Il y avait par exemple :</p><ul>${r.examples.map((e) => `<li><b>${esc(e.artist.name)}</b><span>« ${esc(e.track.title)} »</span>${e.track.preview ? `<button type="button" class="play-btn" data-prev="${esc(e.track.preview)}" aria-label="Écouter « ${esc(e.track.title)} »">▶</button>` : ''}</li>`).join('')}</ul>`;
+        ex.innerHTML = `<p>Il y avait par exemple :</p><ul>${r.examples.map((e) => `<li><div class="ex-txt"><b>${esc(e.artist.name)}</b><span>« ${esc(e.track.title)} »</span></div>${e.track.preview ? `<button type="button" class="play-btn" data-prev="${esc(e.track.preview)}" aria-label="Écouter « ${esc(e.track.title)} »">▶</button>` : ''}</li>`).join('')}</ul>`;
         bindTracks();
       }
     }
