@@ -56,42 +56,6 @@ app.get('/api/room/:code', (req, res) => {
 });
 
 app.get('/health', (_, res) => res.send('ok'));
-// TEMPORAIRE : compare l'ancienne et la nouvelle recherche sur les vrais catalogues Deezer, cache vide. À retirer.
-const benchRuns = new Map();
-app.get('/api/diag-bench', (req, res) => {
-  const key = String(req.query.k || 'x').split('.')[0];
-  if (!benchRuns.has(key)) {
-    const run = { status: 'en cours', lignes: [] };
-    benchRuns.set(key, run);
-    (async () => {
-      const load = (file) => {
-        const full = require.resolve('./' + file);
-        delete require.cache[full];
-        const d = require(full);
-        const st = { n: 0 };
-        d.setFetcher((u) => { st.n++; return fetch(u, { signal: AbortSignal.timeout(8000), headers: { 'Accept-Language': 'fr' } }) || fetch(u, { headers: { 'Accept-Language': 'fr' } }); });
-        return { d, st };
-      };
-      const cases = [['Ninho', 'Niska'], ['Jul', 'SCH'], ['EDGE', 'Demas'], ['Vadek', 'Demas'], ['Ninho', 'Céline Dion'], ['Kekra', 'Josman'], ['Werenoi', 'Damso']];
-      for (const [x, y] of cases) {
-        for (const file of ['bench-old-deezer.js', 'deezer.js']) {
-          const { d, st } = load(file);
-          const find = async (n) => (await d.searchArtists(n, 8)).find((z) => d.norm(z.name) === d.norm(n));
-          run.lignes.push(`… ${file} ${x}`);
-          const to = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('délai dépassé')), ms))]);
-          const a = await to(find(x), 15000).catch((e) => { run.lignes.push(`recherche ${x} : ${e.message}`); return null; });
-          const b = await to(find(y), 15000).catch((e) => { run.lignes.push(`recherche ${y} : ${e.message}`); return null; });
-          st.n = 0; const t0 = Date.now();
-          const t = a && b ? await to(d.findFeat(a, b, ''), 40000).catch((e) => ({ title: 'ERREUR ' + e.message })) : null;
-          run.lignes.push(`${file === 'deezer.js' ? 'NOUVEAU' : 'ancien '} ${x} × ${y} : ${st.n} appels, ${Date.now() - t0} ms → ${t ? t.title : 'refusé'}`);
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-      }
-      run.status = 'fini';
-    })().catch((e) => { run.status = 'erreur ' + e.message; });
-  }
-  res.set('Cache-Control', 'no-store').json({ uptime: Math.round(process.uptime()), mem: Math.round(process.memoryUsage().rss / 1e6), runs: [...benchRuns.keys()], ...benchRuns.get(key) });
-});
 app.get('/r/:code', sendIndex);
 
 io.on('connection', (socket) => {
