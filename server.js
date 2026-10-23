@@ -34,6 +34,10 @@ const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VER
 app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
+// Icônes (onglet du navigateur, écran d'accueil iOS/Android) et fiche d'application installable.
+for (const f of ['favicon-32.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
+app.get('/favicon.ico', (_, res) => res.sendFile(path.join(__dirname, 'favicon-32.png'), { maxAge: '7d' }));
+app.get('/manifest.webmanifest', (_, res) => res.type('application/manifest+json').sendFile(path.join(__dirname, 'manifest.webmanifest')));
 
 // Autocomplétion des artistes (le navigateur ne peut pas appeler Deezer directement : pas de CORS).
 app.get('/api/artists', async (req, res) => {
