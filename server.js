@@ -69,7 +69,7 @@ app.get('/api/diag-bench', (req, res) => {
         delete require.cache[full];
         const d = require(full);
         const st = { n: 0 };
-        d.setFetcher((u) => { st.n++; return fetch(u, { headers: { 'Accept-Language': 'fr' } }); });
+        d.setFetcher((u) => { st.n++; return fetch(u, { signal: AbortSignal.timeout(8000), headers: { 'Accept-Language': 'fr' } }) || fetch(u, { headers: { 'Accept-Language': 'fr' } }); });
         return { d, st };
       };
       const cases = [['Ninho', 'Niska'], ['Jul', 'SCH'], ['EDGE', 'Demas'], ['Vadek', 'Demas'], ['Ninho', 'Céline Dion'], ['Kekra', 'Josman'], ['Werenoi', 'Damso']];
@@ -77,9 +77,12 @@ app.get('/api/diag-bench', (req, res) => {
         for (const file of ['bench-old-deezer.js', 'deezer.js']) {
           const { d, st } = load(file);
           const find = async (n) => (await d.searchArtists(n, 8)).find((z) => d.norm(z.name) === d.norm(n));
-          const a = await find(x), b = await find(y);
+          run.lignes.push(`… ${file} ${x}`);
+          const to = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('délai dépassé')), ms))]);
+          const a = await to(find(x), 15000).catch((e) => { run.lignes.push(`recherche ${x} : ${e.message}`); return null; });
+          const b = await to(find(y), 15000).catch((e) => { run.lignes.push(`recherche ${y} : ${e.message}`); return null; });
           st.n = 0; const t0 = Date.now();
-          const t = a && b ? await d.findFeat(a, b, '').catch(() => null) : null;
+          const t = a && b ? await to(d.findFeat(a, b, ''), 40000).catch((e) => ({ title: 'ERREUR ' + e.message })) : null;
           run.lignes.push(`${file === 'deezer.js' ? 'NOUVEAU' : 'ancien '} ${x} × ${y} : ${st.n} appels, ${Date.now() - t0} ms → ${t ? t.title : 'refusé'}`);
           await new Promise((r) => setTimeout(r, 1500));
         }
