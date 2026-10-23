@@ -5,31 +5,55 @@ const API = 'https://api.deezer.com';
 const TTL = 1000 * 60 * 60 * 6; // 6 h de cache : catalogue à jour sans marteler l'API
 const cache = new Map();
 
-// File d'attente simple : Deezer limite à ~50 requêtes / 5 s par IP.
-let inFlight = 0;
-const queue = [];
-const MAX_CONCURRENT = 6;
-function schedule(fn) {
-  return new Promise((resolve, reject) => {
-    queue.push({ fn, resolve, reject });
-    pump();
-  });
-}
+// File d'attente : Deezer limite à ~50 requêtes / 5 s par IP.
+// Deux priorités : les vérifications d'un joueur qui attend passent toujours avant la préparation en tâche de fond,
+// qui n'utilise jamais plus de 2 places à la fois.
+let inFlight = 0, lowInFlight = 0;
+const high = [], low = [];
+const MAX_CONCURRENT = 6, MAX_LOW = 2;
 function pump() {
-  while (inFlight < MAX_CONCURRENT && queue.length) {
-    const { fn, resolve, reject } = queue.shift();
-    inFlight++;
-    fn().then(resolve, reject).finally(() => { inFlight--; pump(); });
+  while (inFlight < MAX_CONCURRENT && (high.length || (low.length && lowInFlight < MAX_LOW))) {
+    const job = high.length ? high.shift() : low.shift();
+    inFlight++; if (job.isLow) lowInFlight++;
+    job.started = true;
+    job.fn().then(job.resolve, job.reject).finally(() => { inFlight--; if (job.isLow) lowInFlight--; pump(); });
   }
 }
 
 let fetcher = (url) => fetch(url, { headers: { 'Accept-Language': 'fr' } });
 function setFetcher(fn) { fetcher = fn; }
 
-async function get(path) {
+// Appels identiques en cours : on attend le même résultat au lieu de relancer (sauf si une préparation en tâche
+// de fond n'a pas encore démarré et qu'un joueur attend : là on passe devant).
+const pending = new Map();
+function get(path, opts = {}) {
   const hit = cache.get(path);
-  if (hit && hit.exp > Date.now()) return hit.data;
-  const data = await schedule(async () => {
+  if (hit && hit.exp > Date.now()) return Promise.resolve(hit.data);
+  const p = pending.get(path);
+  if (p && (p.started() || opts.low)) return p.promise;
+  let job;
+  const promise = fetchPath(path, !!opts.low, (j) => (job = j)).finally(() => { if (pending.get(path) === entry) pending.delete(path); });
+  const entry = { promise, started: () => !job || job.started };
+  pending.set(path, entry);
+  return promise;
+}
+
+// Passe par la file, met en cache, et apprend les feats contenus dans la réponse (« Mémoire des feats » plus bas).
+async function fetchPath(path, isLow, onJob) {
+  const data = await new Promise((resolve, reject) => {
+    const job = { fn: () => callDeezer(path), resolve, reject, isLow };
+    onJob(job);
+    (isLow ? low : high).push(job);
+    pump();
+  });
+  cache.set(path, { data, exp: Date.now() + TTL });
+  if (cache.size > 8000) cache.delete(cache.keys().next().value);
+  try { learnFrom(path, data); } catch (_) { /* jamais bloquant */ }
+  return data;
+}
+
+async function callDeezer(path) {
+  {
     for (let attempt = 0; attempt < 3; attempt++) {
       const res = await fetcher(API + path);
       if (!res.ok) throw new Error(`Deezer HTTP ${res.status}`);
@@ -43,10 +67,7 @@ async function get(path) {
       return json;
     }
     throw new Error('Deezer: quota dépassé');
-  });
-  cache.set(path, { data, exp: Date.now() + TTL });
-  if (cache.size > 5000) cache.delete(cache.keys().next().value);
-  return data;
+  }
 }
 
 // Normalisation pour comparer des noms ("Gims" == "GIMS", "Beyoncé" == "beyonce")
@@ -164,85 +185,73 @@ const RARE_RANK = 30; // un feat est « rare » si son son n'est dans les 30 plu
  */
 async function findFeat(a, b, songHint) {
   const hint = songHint && songHint.trim();
-  // 1) Tops des deux artistes : Deezer y inclut les contributeurs, donc 0 appel supplémentaire par titre.
-  const tops = await Promise.allSettled([
+  const pk = pairKey(a.name, b.name);
+
+  // 0) Déjà connu (vu dans une autre partie, pendant la préparation, etc.) : aucune recherche.
+  //    Mauvaise réponse déjà tentée récemment (sans titre) : refus immédiat.
+  const memo = knownFeat(a, b);
+  const asRaw = (o) => ({ id: o.id, title: o.fullTitle || o.title, title_short: o.title });
+  if (!memo && !hint && (noFeat.get(pk) || 0) > Date.now()) return null;
+  if (memo && (!hint || titleMatches(asRaw(memo), hint))) {
+    // Feat connu : seuls les tops servent encore (savoir s'il est « rare »), sans aucune recherche.
+    const tops = await Promise.allSettled([get(`/artist/${a.id}/top?limit=100`), get(`/artist/${b.id}/top?limit=100`)]);
+    const ranks = tops.map((r) => new Map((r.status === 'fulfilled' ? r.value.data || [] : []).map((t, i) => [t.id, i])));
+    const rare = ranks.every((m) => !m.has(memo.id) || m.get(memo.id) >= RARE_RANK);
+    return { ...memo, rare, hinted: !!hint };
+  }
+
+  // 1) En parallèle : les tops des deux artistes (avec la liste des artistes de chaque son) et la recherche « A B »,
+  //    qui trouve aussi les sons où les deux ne sont qu'invités. Plus la recherche du titre si le joueur l'a donné.
+  const [topA, topB, pair, hinted] = await Promise.allSettled([
     get(`/artist/${a.id}/top?limit=100`),
     get(`/artist/${b.id}/top?limit=100`),
+    get(`/search?q=${encodeURIComponent(`${a.name} ${b.name}`)}&limit=25`),
+    hint ? get(`/search?q=${encodeURIComponent(`${hint} ${b.name}`)}&limit=25`) : Promise.resolve({ data: [] }),
   ]);
-  const rankIn = tops.map((r) => {
-    const m = new Map();
-    if (r.status === 'fulfilled') (r.value.data || []).forEach((t, i) => m.set(t.id, i));
-    return m;
-  });
+  const data = (r) => (r.status === 'fulfilled' ? r.value.data || [] : []);
+  const rankIn = [topA, topB].map((r) => new Map(data(r).map((t, i) => [t.id, i])));
   const isRare = (t) => rankIn.every((m) => !m.has(t.id) || m.get(t.id) >= RARE_RANK);
   const result = (t) => ({ ...trackOut(t), rare: isRare(t), hinted: !!hint && titleMatches(t, hint) });
+  const done = (t) => { noFeat.delete(pk); return result(t); };
 
-  const provers = [];
-  for (const r of tops) {
-    if (r.status !== 'fulfilled') continue;
-    for (const t of r.value.data || []) if (proves(t, a, b) && !provers.some((x) => x.id === t.id)) provers.push(t);
+
+  const ok = (t) => proves(t, a, b);
+  const provers = dedupe([...data(topA), ...data(topB)].filter(ok));
+  const want = (t) => !hint || titleMatches(t, hint);
+  const best = provers.find(want);
+  if (best) return done(best);
+
+  // 2) Premiers résultats des recherches : preuve directe par le titre, sinon détail (liste officielle des artistes).
+  const searchHits = dedupe([...data(hinted).slice(0, 8), ...data(pair).slice(0, 8)]);
+  const direct = searchHits.find((t) => ok(t) && want(t));
+  if (direct) return done(direct);
+  const det = await Promise.allSettled(searchHits.map((t) => getTrack(t.id)));
+  const found = det.map((d) => (d.status === 'fulfilled' ? d.value : null)).filter((t) => t && ok(t));
+  const pick = found.find(want) || provers[0] || found[0];
+  if (pick && want(pick)) return done(pick);
+  if (hint && (pick || memo)) {
+    // Feat prouvé, mais pas avec le titre donné : on fouille encore pour ce son précis, sinon on garde le feat trouvé.
+    const precise = await findFeatDeep(a, b, (t) => titleMatches(t, hint));
+    if (precise) return done(precise);
+    if (pick) return done(pick);
+    return { ...memo, rare: isRare(memo), hinted: false };
   }
-  if (provers.length) {
-    const hinted = hint && provers.find((t) => titleMatches(t, hint));
-    if (hinted || !hint) return result(hinted || provers[0]);
-    // Titre donné mais pas parmi les gros sons : on cherche ce son précis avant de se rabattre sur le premier trouvé.
-    const precise = await findFeatDeep(a, b, hint, (t) => titleMatches(t, hint));
-    return result(precise || provers[0]);
-  }
-  const deep = await findFeatDeep(a, b, hint);
-  return deep ? result(deep) : null;
+
+  // 3) Fouille profonde (sorties des deux artistes, apparitions « feat. X »).
+  const deep = await findFeatDeep(a, b);
+  if (deep) return done(deep);
+  if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
+  return null;
 }
 
-// Étapes 2 et 3 : recherche plein texte puis albums. `want` (facultatif) impose une condition sur le son trouvé.
-async function findFeatDeep(a, b, songHint, want = () => true) {
+// Étape 3 : sorties (albums, EP, singles) des deux artistes et apparitions « feat. X ».
+// `want` (facultatif) impose une condition sur le son trouvé.
+async function findFeatDeep(a, b, want = () => true) {
   const ok = (t) => proves(t, a, b) && want(t);
-  // 2) Recherche plein texte, puis détail des titres candidats (contributeurs complets).
-  const queries = [];
-  if (songHint && songHint.trim()) {
-    queries.push(`artist:"${a.name}" track:"${songHint.trim()}"`);
-    queries.push(`artist:"${b.name}" track:"${songHint.trim()}"`);
-    queries.push(`${songHint.trim()} ${a.name}`);
-  }
-  queries.push(`${a.name} ${b.name}`, `${b.name} ${a.name}`, `artist:"${a.name}" ${b.name}`, `artist:"${b.name}" ${a.name}`);
-
-  const seen = new Set();
-  const candidates = [];
-  const results = await Promise.allSettled(queries.map((q) => get(`/search?q=${encodeURIComponent(q)}&limit=40`)));
-  // La recherche Deezer indexe aussi les artistes invités : « Demas EDGE » renvoie « CAUCHEMAR » de Vadek en premier,
-  // alors qu'aucun des deux n'est l'artiste principal ni écrit dans le titre. Les premiers résultats des recherches
-  // « A B » / « B A » sont donc toujours vérifiés (c'est l'équivalent du « Featured On » de Spotify).
-  const pairQueries = new Set([`${a.name} ${b.name}`, `${b.name} ${a.name}`]);
-  results.forEach((r, qi) => {
-    if (r.status !== 'fulfilled' || !pairQueries.has(queries[qi])) return;
-    (r.value.data || []).slice(0, 8).forEach((t, rank) => candidates.push({ t, score: 10 - rank }));
-  });
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    for (const t of r.value.data || []) {
-      if (seen.has(t.id)) continue;
-      seen.add(t.id);
-      // Preuve immédiate via "feat." dans le titre
-      if (ok(t)) return t;
-      const mainIsOne = matches(t.artist, a) || matches(t.artist, b);
-      const title = norm(t.title);
-      const mentionsOther = title.includes(norm(a.name)) || title.includes(norm(b.name));
-      if (mainIsOne || mentionsOther) candidates.push({ t, score: (mainIsOne ? 1 : 0) + (mentionsOther ? 2 : 0) + (/feat|ft|with|avec|x /.test(title) ? 1 : 0) });
-    }
-  }
-  candidates.sort((x, y) => y.score - x.score);
-  const toCheck = [...new Set(candidates.map((c) => c.t.id))].slice(0, 20);
-  const details = await Promise.allSettled(toCheck.map((id) => getTrack(id)));
-  for (const d of details) {
-    if (d.status === 'fulfilled' && ok(d.value)) return d.value;
-  }
-
-  // 3) Fouille profonde : albums, EP et singles récents des deux artistes, et leurs apparitions « feat. X » chez d'autres.
-  //    On lit d'abord les titres (peu coûteux) ; on ne demande le détail que des sons qui ressemblent à des feats.
   try {
     const [ta, tb, ga, gb] = await Promise.all([albumTracks(a), albumTracks(b), guestTracks(a), guestTracks(b)]);
-    const all = dedupe([...tb, ...ta, ...gb, ...ga]);
     // Feat écrit dans le titre : prouvé sans appel de plus.
-    const direct = all.find((t) => ok(t));
+    const direct = dedupe([...tb, ...ta, ...gb, ...ga]).find(ok);
     if (direct) return (await getTrack(direct.id).catch(() => null)) || direct;
     // Liste officielle des artistes des sons de leurs sorties. Deezer crédite souvent les invités comme artistes
     // à part entière sans rien écrire dans le titre (ex. « CAUCHEMAR » : Vadek, EDGE, Demas).
@@ -256,7 +265,6 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
       if (hit) return hit;
     }
   } catch (_) { /* ignore */ }
-
   return null;
 }
 
@@ -312,14 +320,14 @@ async function detailInBatches(tracks, enough, cap = 60, size = 12) {
 }
 
 // Titres des albums, EP et singles récents d'un artiste (une liste de titres par sortie, sans détail).
-async function albumTracks(a, max = DEEP_RELEASES) {
+async function albumTracks(a, max = DEEP_RELEASES, isLow = false) {
   try {
-    const albums = await get(`/artist/${a.id}/albums?limit=100`);
+    const albums = await get(`/artist/${a.id}/albums?limit=100`, { low: isLow });
     const recent = (albums.data || [])
-      .slice()
+      .filter((al) => al.record_type !== 'compile') // compilations : doublons de sons déjà sortis ailleurs
       .sort((x, y) => String(y.release_date || '').localeCompare(String(x.release_date || '')))
       .slice(0, max);
-    const lists = await Promise.allSettled(recent.map((al) => get(`/album/${al.id}/tracks?limit=100`)));
+    const lists = await Promise.allSettled(recent.map((al) => get(`/album/${al.id}/tracks?limit=100`, { low: isLow })));
     return lists.flatMap((l) => (l.status === 'fulfilled' ? l.value.data || [] : []))
       .map((t) => ({ ...t, artist: t.artist || { id: a.id, name: a.name } }));
   } catch (_) { return []; }
@@ -327,7 +335,7 @@ async function albumTracks(a, max = DEEP_RELEASES) {
 
 // Apparitions de l'artiste chez les autres : sons dont le titre le crédite en feat.
 async function guestTracks(a) {
-  const qs = [`feat ${a.name}`, `ft ${a.name}`];
+  const qs = [`feat ${a.name}`];
   const res = await Promise.allSettled(qs.map((q) => get(`/search?q=${encodeURIComponent(q)}&limit=50`)));
   const n = norm(a.name);
   return dedupe(res.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : [])))
@@ -341,7 +349,10 @@ async function guestTracks(a) {
  */
 async function findCollaboratorsDeep(a, isUsed = () => false) {
   const top = (await findCollaborators(a, 100)).filter((o) => !isUsed(o.artist));
-  if (top.length) return top;
+  // Partenaires déjà appris (préparation, autres parties, recherches précédentes) qui ne sont pas dans le top.
+  const seenTop = new Set(top.map((o) => norm(o.artist.name)));
+  const memo = knownPartners(a, isUsed).filter((o) => !seenTop.has(norm(o.artist.name)));
+  if (top.length || memo.length) return [...top, ...memo];
 
   const [own, guest] = await Promise.all([albumTracks(a), guestTracks(a)]);
   const tracks = dedupe([...own, ...guest]);
@@ -407,4 +418,91 @@ async function trackArtists(track) {
   return names.filter((n) => n && !seen.has(norm(n)) && seen.add(norm(n)));
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+// ---------- Mémoire des feats (partagée entre toutes les parties) ----------
+// Chaque son vu passer (tops, recherches, détails) est « appris » : pour chaque paire d'artistes du son, on retient
+// le feat dans les deux sens. Une vérification déjà connue ne coûte alors plus aucun appel.
+const MEMO_TTL = TTL;
+const NO_FEAT_TTL = 30 * 60 * 1000; // une mauvaise réponse est retenue 30 min
+const featMemo = new Map();          // "a|b" (noms normalisés, triés) → { track, exp }
+const partnerIdx = new Map();        // nom normalisé → Map(nom partenaire → { artist, track, exp })
+const noFeat = new Map();            // "a|b" → expiration
+const pairKey = (x, y) => [norm(x), norm(y)].sort().join('|');
+
+// Artistes d'un son : crédités par Deezer (officiels) + écrits dans la partie feat du titre.
+function peopleOf(t) {
+  const out = [];
+  const seen = new Set();
+  const push = (p, official) => { const k = norm(p.name); if (k && !seen.has(k)) { seen.add(k); out.push({ ...p, official }); } };
+  (t.contributors && t.contributors.length ? t.contributors : t.artist ? [t.artist] : []).forEach((p) => push(p, true));
+  featCredits(t.title).forEach((name) => push({ id: null, name }, false));
+  return out;
+}
+
+function learnTrack(t) {
+  if (!t || !t.id || !t.title) return;
+  const ppl = peopleOf(t);
+  if (ppl.length < 2) return;
+  const out = trackOut(t);
+  const exp = Date.now() + MEMO_TTL;
+  for (let i = 0; i < ppl.length; i++) {
+    for (let j = i + 1; j < ppl.length; j++) {
+      const x = ppl[i], y = ppl[j];
+      if (!x.official && !y.official) continue; // comme proves() : au moins un des deux doit être crédité sur le son
+      const k = pairKey(x.name, y.name);
+      if (!featMemo.has(k)) featMemo.set(k, { track: out, exp });
+      link(x, y, out, exp); link(y, x, out, exp);
+    }
+  }
+  if (featMemo.size > 100000) featMemo.delete(featMemo.keys().next().value);
+  if (partnerIdx.size > 30000) partnerIdx.delete(partnerIdx.keys().next().value);
+}
+function link(x, y, track, exp) {
+  const k = norm(x.name);
+  let m = partnerIdx.get(k);
+  if (!m) { m = new Map(); partnerIdx.set(k, m); }
+  const ky = norm(y.name);
+  if (!m.has(ky) && m.size < 400) m.set(ky, { artist: y.id ? artistOut(y) : { id: null, name: y.name, picture: null }, track, exp });
+}
+function learnFrom(path, data) {
+  if (path.startsWith('/track/')) return learnTrack(data);
+  if (/^\/(artist\/\d+\/top|search\?|album\/\d+\/tracks)/.test(path)) (data.data || []).forEach(learnTrack);
+}
+function knownFeat(a, b) {
+  const m = featMemo.get(pairKey(a.name, b.name));
+  return m && m.exp > Date.now() ? m.track : null;
+}
+// Partenaires déjà appris d'un artiste (hors ceux pour qui isUsed est vrai).
+function knownPartners(a, isUsed = () => false) {
+  const m = partnerIdx.get(norm(a.name));
+  if (!m) return [];
+  const now = Date.now();
+  return [...m.values()].filter((o) => o.exp > now && !isUsed(o.artist)).map(({ artist, track }) => ({ artist, track }));
+}
+
+// ---------- Préparation pendant que le joueur réfléchit ----------
+// Dès qu'un artiste est en jeu, on charge ses partenaires en tâche de fond (basse priorité) : top, apparitions
+// chez d'autres, et si besoin la liste des artistes des sons de ses sorties. La réponse du joueur, le contrôle du K.O.
+// et le joker s'appuient ensuite sur la mémoire sans attendre Deezer.
+const prepared = new Map(); // id artiste → date
+async function prepare(a) {
+  if (!a || !a.id) return;
+  const last = prepared.get(a.id);
+  if (last && Date.now() - last < 30 * 60 * 1000) return;
+  prepared.set(a.id, Date.now());
+  if (prepared.size > 5000) prepared.delete(prepared.keys().next().value);
+  const lowGet = (p) => get(p, { low: true }).catch(() => null);
+  try {
+    // 1) Top (avec les artistes de chaque son) + recherche du nom (trouve aussi les sons où il est invité).
+    const [, search] = await Promise.all([lowGet(`/artist/${a.id}/top?limit=100`), lowGet(`/search?q=${encodeURIComponent(a.name)}&limit=50`)]);
+    // 2) Apparitions chez d'autres : détail des premiers résultats dont il n'est pas l'artiste principal.
+    const others = ((search && search.data) || []).filter((t) => !matches(t.artist, a)).slice(0, 12);
+    await Promise.all(others.map((t) => lowGet(`/track/${t.id}`)));
+    if (knownPartners(a).length >= 8) return;
+    // 3) Petit artiste ou peu de partenaires connus : artistes de tous les sons de ses sorties.
+    const own = await albumTracks(a, DEEP_RELEASES, true);
+    const list = featFirst(uniqueByTitle(own)).slice(0, 40);
+    await Promise.all(list.map((t) => lowGet(`/track/${t.id}`)));
+  } catch (_) { /* tâche de fond : jamais bloquant */ }
+}
+
+module.exports = { prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

@@ -188,6 +188,8 @@ class Room {
     let top;
     try { top = (await deezer.findCollaborators(cur, 100)).filter((o) => !isUsed(o.artist)); } catch (e) { return; }
     if (stale() || top.length) return;
+    // Partenaires déjà appris (préparation en tâche de fond, autres parties) : pas besoin de fouiller.
+    if (deezer.knownPartners(cur, isUsed).length) return;
     // Rien dans les sons les plus écoutés : avant de déclarer le K.O., fouille profonde (albums, apparitions).
     // Chrono en pause pendant la vérification, pour ne pas pénaliser le joueur.
     r.checking = { verifying: true, artist: { name: cur.name } };
@@ -256,6 +258,7 @@ class Room {
     if (!found) { p.jokers += KO_RELAUNCH_COST; return this.koVictim(); } // Deezer en panne : jokers rendus, on peut réessayer
     r.ko = null;
     r.chain.push({ artist: found, by: i, track: null, relaunch: true });
+    deezer.prepare(found);
     r.turn = this.nextAlive(i);
     r.tries = 0; r.lastError = null;
     this.resetClock();
@@ -337,6 +340,7 @@ class Room {
     r.turn = this.nextAlive(r.turn);
     this.resetClock();
     this.broadcast();
+    deezer.prepare(a); // prépare ses partenaires pendant que le joueur réfléchit
   }
 
   // Le joueur qui commence laisse le jeu tirer un rappeur français au hasard.
@@ -492,6 +496,7 @@ class Room {
     this.resetClock();
     this.broadcast();
     this.emitAll('link', { track, artist: a });
+    deezer.prepare(a); // prépare ses partenaires pendant que le joueur suivant réfléchit
     this.checkKO();
   }
 
