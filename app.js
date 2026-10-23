@@ -359,7 +359,8 @@
     $('#randomBtn').hidden = !choosing;
     // Joker : visible pendant ton tour si tu en as au moins un.
     $('#jokerBtn').hidden = choosing || !(S.jokers > 0);
-    $('#jokerBtn').textContent = `🃏 Joker : un rappeur à ma place (${S.jokers})`;
+    $('#jokerBtn').textContent = 'Joker';
+    $('#jokerBtn').setAttribute('aria-label', `Joker : un rappeur à ta place (${S.jokers} restant${S.jokers > 1 ? 's' : ''})`);
     $('#artistInput').placeholder = choosing ? 'Un artiste pour lancer la chaîne' : `Un artiste qui a fait un son avec ${cur ? cur.name : ''}`;
     $('#submitBtn').textContent = choosing ? 'Lancer' : 'Valider';
     if (myTurn) {
