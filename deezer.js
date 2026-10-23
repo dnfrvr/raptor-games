@@ -236,10 +236,17 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
     // Feat écrit dans le titre : prouvé sans appel de plus.
     const direct = all.find((t) => ok(t));
     if (direct) return (await getTrack(direct.id).catch(() => null)) || direct;
-    // Sons marqués « feat » de l'un des deux : on regarde la liste officielle des artistes.
-    const weak = all.filter((t) => featCredits(t.title).length && (matches(t.artist, a) || matches(t.artist, b))).slice(0, 18);
-    const det = await Promise.allSettled(weak.map((t) => getTrack(t.id)));
-    for (const d of det) if (d.status === 'fulfilled' && ok(d.value)) return d.value;
+    // Liste officielle des artistes des sons de leurs sorties. Deezer crédite souvent les invités comme artistes
+    // à part entière sans rien écrire dans le titre (ex. « CAUCHEMAR » : Vadek, EDGE, Demas).
+    // Le plus petit catalogue d'abord (c'est là que le son a le plus de chances d'être), arrêt dès que c'est prouvé.
+    const ua = featFirst(uniqueByTitle(ta)), ub = featFirst(uniqueByTitle(tb));
+    const lists = ua.length <= ub.length ? [ua, ub] : [ub, ua];
+    for (const [k, list] of lists.entries()) {
+      if (k === 1 && list.length > 80) break; // gros catalogue : déjà couvert par son top et la recherche
+      const det = await detailInBatches(list, (got) => got.some(ok), 60);
+      const hit = det.find(ok);
+      if (hit) return hit;
+    }
   } catch (_) { /* ignore */ }
 
   return null;
@@ -276,6 +283,24 @@ const DEEP_RELEASES = 25; // sorties les plus récentes regardées par artiste
 function dedupe(tracks) {
   const seen = new Set();
   return tracks.filter((t) => t && !seen.has(t.id) && seen.add(t.id));
+}
+
+// Un même son apparaît souvent deux fois (single puis album) : on garde une seule version par titre.
+function uniqueByTitle(tracks) {
+  const seen = new Set();
+  return tracks.filter((t) => { const k = norm(t.title_short || t.title); return k && !seen.has(k) && seen.add(k); });
+}
+// Les sons marqués « feat » d'abord, puis les autres (Deezer crédite souvent les invités sans rien écrire dans le titre).
+const featFirst = (tracks) => [...tracks.filter((t) => featCredits(t.title).length), ...tracks.filter((t) => !featCredits(t.title).length)];
+// Détail (liste officielle des artistes) des sons, par lots, en s'arrêtant dès que `enough(détails)` est vrai.
+async function detailInBatches(tracks, enough, cap = 60, size = 12) {
+  const out = [];
+  for (let i = 0; i < Math.min(cap, tracks.length); i += size) {
+    const det = await Promise.allSettled(tracks.slice(i, Math.min(i + size, cap)).map((t) => getTrack(t.id)));
+    det.forEach((d) => d.status === 'fulfilled' && out.push(d.value));
+    if (enough(out)) break;
+  }
+  return out;
 }
 
 // Titres des albums, EP et singles récents d'un artiste (une liste de titres par sortie, sans détail).
@@ -327,16 +352,15 @@ async function findCollaboratorsDeep(a, isUsed = () => false) {
     add(t.artist, t);
     credits.forEach((name) => add({ name }, t));
   }
-  // Sinon : détail des sons de l'artiste marqués « feat » (artistes crédités par Deezer).
-  if (!found.size) {
-    const weak = own.filter((t) => featCredits(t.title).length).slice(0, 18);
-    const det = await Promise.allSettled(weak.map((t) => getTrack(t.id)));
-    for (const d of det) {
-      if (d.status !== 'fulfilled') continue;
-      const t = d.value;
-      if (!(t.contributors || []).some((p) => matches(p, a))) continue;
+  // Sinon : liste officielle des artistes de TOUS les sons de ses sorties (pas seulement ceux marqués « feat »),
+  // car Deezer crédite souvent les invités sans rien écrire dans le titre. On s'arrête dès qu'on en a trouvé assez.
+  if (found.size < 3) {
+    const list = featFirst(uniqueByTitle(own));
+    const take = (t) => {
+      if (!(t.contributors || []).some((p) => matches(p, a))) return;
       (t.contributors || []).forEach((p) => add(p, t));
-    }
+    };
+    await detailInBatches(list, (got) => { got.forEach(take); return found.size >= 5; }, 60);
   }
   // Les noms lus seulement dans un titre n'ont pas d'identifiant Deezer : on le retrouve pour les premiers.
   const list = [...found.values()];

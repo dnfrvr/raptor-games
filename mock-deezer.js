@@ -29,9 +29,11 @@ const tracks = [
   // Jul → Kalash ne doit PAS faire K.O. (la fouille profonde trouve Damso), et Kalash × Damso doit être validé.
   [116, 'Seul', 'Jul', ['Kalash']],
   [117, 'Cachée (feat. Kalash)', 'Damso', [], true],
-  // Cas réel signalé : son d'Edge avec Vadek et Demas crédités par Deezer (rien dans le titre),
-  // absent du top de Vadek. Edge → Vadek ne doit PAS faire K.O. : on peut encore répondre Demas.
-  [118, 'Trio', 'Edge', ['Vadek', 'Demas'], true],
+  // Cas réel (données Deezer vérifiées) : album « DU TEMPS » de Vadek, Demas et EDGE crédités comme artistes
+  // sans rien dans les titres, et un top Deezer quasi vide. Edge → Vadek ne doit PAS faire K.O. (Demas possible).
+  [118, 'CAUCHEMAR', 'Vadek', ['Edge', 'Demas'], true],
+  [120, 'SIN CITY', 'Vadek', ['Demas'], true],
+  [121, 'DIE', 'Vadek', ['Demas'], true],
   // Variante : l'invité n'est écrit que dans le titre.
   [119, 'Duo (feat. Kekra)', 'Naps', ['Tiakola']],
 ].map(([id, title, main, feats, deep]) => ({
