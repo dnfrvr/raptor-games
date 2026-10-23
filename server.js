@@ -57,9 +57,18 @@ app.get('/api/room/:code', (req, res) => {
 
 app.get('/health', (_, res) => res.send('ok'));
 // TEMPORAIRE (diagnostic d'un faux K.O.) : ce que Deezer renvoie pour un artiste. À retirer.
-app.get('/api/diag', async (req, res) => {
-  try { res.json(await deezer.diag(String(req.query.a || ''), String(req.query.b || ''))); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+const diagRuns = new Map();
+app.get('/api/diag', (req, res) => {
+  const key = String(req.query.a || '') + '|' + String(req.query.b || '');
+  let run = diagRuns.get(key);
+  if (!run) {
+    run = { status: 'en cours' };
+    diagRuns.set(key, run);
+    deezer.diag(String(req.query.a || ''), String(req.query.b || ''))
+      .then((r) => { run.status = 'fini'; run.result = r; })
+      .catch((e) => { run.status = 'erreur'; run.error = e.message; });
+  }
+  res.set('Cache-Control', 'no-store').json(run);
 });
 app.get('/r/:code', sendIndex);
 
