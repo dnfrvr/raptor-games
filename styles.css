@@ -453,3 +453,7 @@ body.ko-open .reacts { visibility: hidden; }
 .track img { transition: filter .3s; }
 /* Retour visuel immédiat sur l'artiste touché dans la liste */
 .ac-list li.pressed { background: #ffe57a; }
+/* Bouton « Rejoindre » : avec son ombre (6 px), il fait exactement la hauteur du champ du code */
+.joincode-row { align-items: stretch; }
+.joincode-row .btn { min-height: 0; height: auto; margin-bottom: 6px; padding: 0 16px; font-size: 19px; }
+.joincode-row .btn:active { transform: translateY(5px); }
