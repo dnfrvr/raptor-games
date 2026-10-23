@@ -34,6 +34,14 @@
       <input id="nameInput" maxlength="20" placeholder="Dinos" required autocomplete="nickname" enterkeyhint="go">
       <button class="btn big" id="homeBtn" type="submit">Créer une partie</button>
       <button class="btn ghost big" id="soloBtn" type="button">Jouer en solo</button>
+      <div class="joincode" id="joinCode">
+        <label class="field" for="codeInput">Tu as un code de partie ?</label>
+        <div class="joincode-row">
+          <input id="codeInput" maxlength="5" placeholder="Ex. K9PZA" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" aria-describedby="codeMsg">
+          <button class="btn" id="codeBtn" type="button">Rejoindre</button>
+        </div>
+        <p class="small codemsg" id="codeMsg" role="status" hidden></p>
+      </div>
     </form>
 
     <ol class="rules" aria-label="Règles">

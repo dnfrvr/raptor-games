@@ -39,6 +39,7 @@
   if (inviteCode && !ownRoom) {
     $('#homeBtn').textContent = 'Rejoindre';
     $('#soloBtn').hidden = true;
+    $('#joinCode').hidden = true;
     $('#invited').hidden = false;
     $('#invited').textContent = 'Tu as été invité à une partie.';
     fetch('/api/room/' + encodeURIComponent(inviteCode)).then((r) => r.json()).then((info) => {
@@ -47,6 +48,7 @@
         $('#invited').classList.add('warn');
         inviteCode = '';
         $('#soloBtn').hidden = false;
+        $('#joinCode').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
         history.replaceState(null, '', '/');
       } else if (info.started) {
@@ -54,12 +56,14 @@
         $('#invited').classList.add('warn');
         inviteCode = '';
         $('#soloBtn').hidden = false;
+        $('#joinCode').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.full) {
         $('#invited').textContent = 'Cette partie est déjà complète. Tu peux en créer une nouvelle.';
         $('#invited').classList.add('warn');
         inviteCode = '';
         $('#soloBtn').hidden = false;
+        $('#joinCode').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.host) {
         $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à une partie.`;
@@ -77,6 +81,35 @@
     if (inviteCode) socket.emit('join', { token, name, code: inviteCode });
     else socket.emit('create', { token, name });
   });
+
+  // Rejoindre avec un code (celui affiché en haut du salon de l'hôte).
+  const codeInput = $('#codeInput');
+  codeInput.addEventListener('input', () => {
+    const v = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+    if (v !== codeInput.value) codeInput.value = v;
+    $('#codeMsg').hidden = true;
+  });
+  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); joinByCode(); } });
+  $('#codeBtn').addEventListener('click', joinByCode);
+  async function joinByCode() {
+    const code = codeInput.value.trim().toUpperCase();
+    const msg = (t) => { $('#codeMsg').textContent = t; $('#codeMsg').hidden = false; };
+    if (code.length < 5) { msg('Le code fait 5 caractères.'); return codeInput.focus(); }
+    $('#codeBtn').disabled = true;
+    try {
+      const info = await (await fetch('/api/room/' + encodeURIComponent(code))).json();
+      if (!info.exists) return msg('Aucune partie avec ce code. Vérifie-le auprès de l’hôte.');
+      if (info.started) return msg('Cette partie a déjà commencé.');
+      if (info.full) return msg('Cette partie est complète.');
+      const name = $('#nameInput').value.trim();
+      if (!name) { msg('Choisis d’abord ton pseudo, juste au-dessus.'); return $('#nameInput').focus(); }
+      store.set('rg_name', name);
+      unlockAudio();
+      inviteCode = code;
+      socket.emit('join', { token, name, code });
+    } catch { msg('Impossible de joindre le serveur. Réessaie dans un instant.'); }
+    finally { setTimeout(() => ($('#codeBtn').disabled = !socket.connected), 300); }
+  }
 
   // Mode solo : une partie contre le bot, sans invitation.
   $('#soloBtn').addEventListener('click', () => {
@@ -107,12 +140,12 @@
     };
     wakeTimer = setInterval(tick, 1000);
     setTimeout(() => { if (wakeTimer) tick(); }, 1200); // on n'affiche rien si la connexion arrive tout de suite
-    $('#homeBtn').disabled = true; $('#soloBtn').disabled = true;
+    $('#homeBtn').disabled = true; $('#soloBtn').disabled = true; $('#codeBtn').disabled = true;
   }
   function hideWake() {
     clearInterval(wakeTimer); wakeTimer = null;
     $('#wake').hidden = true;
-    $('#homeBtn').disabled = false; $('#soloBtn').disabled = false;
+    $('#homeBtn').disabled = false; $('#soloBtn').disabled = false; $('#codeBtn').disabled = false;
   }
   if (!socket.connected) showWake();
   socket.on('connect', hideWake);

@@ -439,3 +439,11 @@ body.ko-open .reacts { visibility: hidden; }
 
 .ko-jokers { display: inline-block; font-size: 14px; font-weight: 700; color: var(--night); background: var(--paper); padding: 4px 12px; border-radius: var(--r); box-shadow: 0 3px 0 #a9b6d9; }
 .ko-jokers b { font-family: var(--display); font-weight: 400; font-size: 18px; }
+
+/* Rejoindre avec un code (accueil) */
+.joincode { margin-top: 24px; padding-top: 20px; border-top: 2px dashed var(--line); }
+.joincode-row { display: flex; gap: 10px; }
+#codeInput { flex: 1; min-width: 0; font-family: var(--display); font-size: 22px; letter-spacing: .18em; text-transform: uppercase; }
+#codeInput::placeholder { font-family: var(--text); font-size: 16px; letter-spacing: 0; text-transform: none; }
+.joincode .btn { flex: none; }
+.codemsg { margin-top: 10px; color: #ffd9c2; }
