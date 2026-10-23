@@ -54,7 +54,13 @@ function route(path) {
   if ((m = u.pathname.match(/^\/album\/9(\d{3})\/tracks$/))) return { data: tracks.filter((t) => t.artist.id === +m[1]).map(({ contributors, ...t }) => t) };
   if ((m = u.pathname.match(/^\/artist\/(\d+)$/))) return artists.find((a) => a.id === +m[1]);
   if ((m = u.pathname.match(/^\/track\/(\d+)$/))) return tracks.find((t) => t.id === +m[1]);
-  if (u.pathname === '/search') return { data: tracks.filter((t) => words.some((w) => (t.title + ' ' + t.artist.name).toLowerCase().includes(w))).map(({ contributors, ...t }) => t) };
+  // Comme le vrai Deezer : la recherche indexe aussi les artistes invités (pas seulement le titre et l'artiste principal),
+  // et les sons qui contiennent tous les mots passent en premier.
+  if (u.pathname === '/search') {
+    const hay = (t) => (t.title + ' ' + t.contributors.map((c) => c.name).join(' ')).toLowerCase();
+    const score = (t) => words.filter((w) => hay(t).includes(w)).length;
+    return { data: tracks.filter((t) => score(t) > 0).sort((x, y) => score(y) - score(x)).map(({ contributors, ...t }) => t) };
+  }
   return { error: { message: 'not found' } };
 }
 

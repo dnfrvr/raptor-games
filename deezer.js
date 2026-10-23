@@ -208,6 +208,14 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
   const seen = new Set();
   const candidates = [];
   const results = await Promise.allSettled(queries.map((q) => get(`/search?q=${encodeURIComponent(q)}&limit=40`)));
+  // La recherche Deezer indexe aussi les artistes invités : « Demas EDGE » renvoie « CAUCHEMAR » de Vadek en premier,
+  // alors qu'aucun des deux n'est l'artiste principal ni écrit dans le titre. Les premiers résultats des recherches
+  // « A B » / « B A » sont donc toujours vérifiés (c'est l'équivalent du « Featured On » de Spotify).
+  const pairQueries = new Set([`${a.name} ${b.name}`, `${b.name} ${a.name}`]);
+  results.forEach((r, qi) => {
+    if (r.status !== 'fulfilled' || !pairQueries.has(queries[qi])) return;
+    (r.value.data || []).slice(0, 8).forEach((t, rank) => candidates.push({ t, score: 10 - rank }));
+  });
   for (const r of results) {
     if (r.status !== 'fulfilled') continue;
     for (const t of r.value.data || []) {
@@ -222,7 +230,7 @@ async function findFeatDeep(a, b, songHint, want = () => true) {
     }
   }
   candidates.sort((x, y) => y.score - x.score);
-  const toCheck = candidates.slice(0, 18).map((c) => c.t.id);
+  const toCheck = [...new Set(candidates.map((c) => c.t.id))].slice(0, 20);
   const details = await Promise.allSettled(toCheck.map((id) => getTrack(id)));
   for (const d of details) {
     if (d.status === 'fulfilled' && ok(d.value)) return d.value;
@@ -352,6 +360,16 @@ async function findCollaboratorsDeep(a, isUsed = () => false) {
     add(t.artist, t);
     credits.forEach((name) => add({ name }, t));
   }
+  // Apparitions chez d'autres (le « Featured On ») : la recherche du nom renvoie aussi les sons où l'artiste est invité.
+  // On vérifie la liste des artistes des premiers résultats dont il n'est pas l'artiste principal.
+  if (found.size < 3) {
+    try {
+      const res = (await get(`/search?q=${encodeURIComponent(a.name)}&limit=50`)).data || [];
+      const others = res.filter((t) => !matches(t.artist, a)).slice(0, 24);
+      const take = (t) => { if ((t.contributors || []).some((p) => matches(p, a))) (t.contributors || []).forEach((p) => add(p, t)); };
+      await detailInBatches(others, (got) => { got.forEach(take); return found.size >= 5; }, 24);
+    } catch (_) { /* ignore */ }
+  }
   // Sinon : liste officielle des artistes de TOUS les sons de ses sorties (pas seulement ceux marqués « feat »),
   // car Deezer crédite souvent les invités sans rien écrire dans le titre. On s'arrête dès qu'on en a trouvé assez.
   if (found.size < 3) {
@@ -389,7 +407,4 @@ async function trackArtists(track) {
   return names.filter((n) => n && !seen.has(norm(n)) && seen.add(norm(n)));
 }
 
-// TEMPORAIRE (diagnostic)
-const rawSearch = (q) => get(`/search?q=${encodeURIComponent(q)}&limit=50`);
-
-module.exports = { rawSearch, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
