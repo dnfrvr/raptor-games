@@ -320,8 +320,10 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 /* Exemples de feats en fin de manche */
 .examples { margin: 18px auto 0; max-width: 360px; text-align: left; }
 .examples p { margin: 0 0 8px; font-size: 14px; color: var(--mute); text-align: center; }
-.examples ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.examples li { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; background: var(--night-3); border-radius: var(--r); min-height: 52px; }
+.examples ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.examples li { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; background: var(--night-3); border-radius: var(--r); min-height: 52px; min-width: 0; overflow: hidden; }
+/* Titres trop longs : coupés avec « … » pour ne jamais déborder de l'écran */
+.examples li .play-btn { flex: none; }
 .examples li b { font-family: var(--display); font-weight: 400; font-size: 20px; text-transform: uppercase; line-height: 1.1; flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .examples li span { flex: 1; min-width: 0; font-size: 14px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
