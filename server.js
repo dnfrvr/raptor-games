@@ -56,19 +56,6 @@ app.get('/api/room/:code', (req, res) => {
 });
 
 app.get('/health', (_, res) => res.send('ok'));
-// TEMPORAIRE : vérifie un feat sur les vraies données Deezer. À retirer.
-app.get('/api/diag-feat', async (req, res) => {
-  try {
-    const find = async (n) => (await deezer.searchArtists(n, 8)).find((x) => deezer.norm(x.name) === deezer.norm(n));
-    const a = await find(String(req.query.a || '')), b = await find(String(req.query.b || ''));
-    if (!a || !b) return res.json({ erreur: 'artiste introuvable', a: !!a, b: !!b });
-    const t0 = Date.now();
-    const t = await deezer.findFeat(a, b, '');
-    const t1 = Date.now();
-    const deep = await deezer.findCollaboratorsDeep(b, (x) => deezer.norm(x.name) === deezer.norm(a.name));
-    res.set('Cache-Control', 'no-store').json({ feat: t ? t.title + ' — ' + (t.artists || []).join(', ') : null, ms: t1 - t0, partenaires_de_b: deep.map((o) => o.artist.name).slice(0, 12), ms_partenaires: Date.now() - t1 });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 app.get('/r/:code', sendIndex);
 
 io.on('connection', (socket) => {
