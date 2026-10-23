@@ -389,4 +389,7 @@ async function trackArtists(track) {
   return names.filter((n) => n && !seen.has(norm(n)) && seen.add(norm(n)));
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+// TEMPORAIRE (diagnostic)
+const rawSearch = (q) => get(`/search?q=${encodeURIComponent(q)}&limit=50`);
+
+module.exports = { rawSearch, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

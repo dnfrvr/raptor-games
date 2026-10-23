@@ -56,6 +56,14 @@ app.get('/api/room/:code', (req, res) => {
 });
 
 app.get('/health', (_, res) => res.send('ok'));
+// TEMPORAIRE : teste si la recherche Deezer trouve les sons où l'artiste n'est qu'invité. À retirer.
+app.get('/api/diag-search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '');
+    const r = await deezer.rawSearch(q);
+    res.set('Cache-Control', 'no-store').json({ q, total: r.total, sons: (r.data || []).slice(0, 40).map((t) => t.title + ' — ' + (t.artist && t.artist.name)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/r/:code', sendIndex);
 
 io.on('connection', (socket) => {
