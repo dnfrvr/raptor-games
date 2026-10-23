@@ -830,7 +830,7 @@
     el.style.left = `${12 + Math.random() * 70}%`;
     document.body.appendChild(el);
     sfx.pop();
-    setTimeout(() => el.remove(), 2600);
+    setTimeout(() => el.remove(), 3500);
   });
   $('#jokerBtn').onclick = () => socket.emit('joker');
   $('#judgeYes').onclick = () => socket.emit('judge', { ok: true });

@@ -340,11 +340,16 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 .reacts button:active { transform: translateY(3px) scale(.95); box-shadow: 0 1px 0 var(--deep); }
 .reacts.cool button { opacity: .45; }
 .sheet .reacts { margin: 16px 0 18px; }
-.float { position: fixed; bottom: 18%; z-index: 70; display: flex; flex-direction: column; align-items: center; pointer-events: none; animation: floatUp 2.5s cubic-bezier(.2,.7,.3,1) forwards; }
+.float { position: fixed; bottom: 18%; z-index: 70; display: flex; flex-direction: column; align-items: center; pointer-events: none; opacity: 0;
+  animation: floatRise 3.4s cubic-bezier(.25,.6,.35,1) forwards, floatFade 3.4s ease-in-out forwards; will-change: transform, opacity; }
+.float .e { animation: floatSway 1.7s ease-in-out infinite alternate; }
 .float .e { font-size: 46px; line-height: 1; filter: drop-shadow(0 4px 6px #0008); }
 .float .n { margin-top: 2px; font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 3px; background: var(--pc, var(--paper)); color: var(--pt, var(--night)); }
-@keyframes floatUp { 0% { transform: translateY(30px) scale(.5); opacity: 0; } 12% { transform: translateY(0) scale(1.15); opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-46vh) scale(1); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .float { animation: none !important; } }
+/* Montée douce et continue, apparition et disparition en fondu, léger balancement */
+@keyframes floatRise { 0% { transform: translateY(24px) scale(.7); } 18% { transform: translateY(-4vh) scale(1); } 100% { transform: translateY(-40vh) scale(.95); } }
+@keyframes floatFade { 0% { opacity: 0; } 14% { opacity: 1; } 60% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes floatSway { from { transform: translateX(-6px) rotate(-6deg); } to { transform: translateX(6px) rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .float { animation: floatFade 2.5s ease-in-out forwards !important; } .float .e { animation: none !important; } }
 
 /* Serveur endormi */
 .wake { position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 80; display: flex; align-items: center; gap: 4px; max-width: calc(100% - 32px); padding: 12px 16px; border-radius: var(--r); background: var(--paper); color: var(--night); font-weight: 700; font-size: 14px; box-shadow: 0 5px 0 #a9b6d9, 0 12px 30px #000a; }
