@@ -365,4 +365,34 @@ async function trackArtists(track) {
   return names.filter((n) => n && !seen.has(norm(n)) && seen.add(norm(n)));
 }
 
-module.exports = { searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+// TEMPORAIRE : diagnostic compact pour un artiste a (et un partenaire b). À retirer.
+async function diag(aName, bName) {
+  const out = {};
+  const arts = (await get(`/search/artist?q=${encodeURIComponent(aName)}&limit=5`)).data || [];
+  out.profils = arts.filter((x) => norm(x.name) === norm(aName)).map((x) => ({ id: x.id, fans: x.nb_fan, albums: x.nb_album }));
+  for (const p of out.profils) {
+    const a = { id: p.id, name: aName };
+    const top = (await get(`/artist/${p.id}/top?limit=100`)).data || [];
+    p.top_nb = top.length;
+    p.top_avec_b = top.filter((t) => (t.contributors || []).some((c) => norm(c.name) === norm(bName)) || norm(t.title).includes(norm(bName)))
+      .map((t) => ({ titre: t.title, principal: t.artist && t.artist.name, contributeurs: (t.contributors || []).map((c) => c.name + '#' + c.id) }));
+    const albums = (await get(`/artist/${p.id}/albums?limit=100`)).data || [];
+    p.sorties = albums.map((al) => al.title + ' (' + (al.record_type || '') + ', ' + (al.release_date || '') + ')');
+    p.sons_avec_b = [];
+    for (const al of albums.slice(0, 30)) {
+      const tr = (await get(`/album/${al.id}/tracks?limit=100`)).data || [];
+      for (const t of tr) {
+        const d = await get(`/track/${t.id}`).catch(() => null);
+        const cs = d ? (d.contributors || []).map((c) => c.name + '#' + c.id + ':' + (c.role || '')) : [];
+        if (cs.some((c) => norm(c.split('#')[0]) === norm(bName)) || norm(t.title).includes(norm(bName))) {
+          p.sons_avec_b.push({ album: al.title, titre: t.title, principal: t.artist && t.artist.name, contributeurs: cs });
+        }
+      }
+    }
+    p.partenaires_top = (await findCollaborators(a, 100)).map((o) => o.artist.name);
+    p.partenaires_profond = (await findCollaboratorsDeep(a, () => false)).map((o) => o.artist.name).slice(0, 30);
+  }
+  return out;
+}
+
+module.exports = { diag, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

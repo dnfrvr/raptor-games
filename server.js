@@ -56,6 +56,11 @@ app.get('/api/room/:code', (req, res) => {
 });
 
 app.get('/health', (_, res) => res.send('ok'));
+// TEMPORAIRE (diagnostic d'un faux K.O.) : ce que Deezer renvoie pour un artiste. À retirer.
+app.get('/api/diag', async (req, res) => {
+  try { res.json(await deezer.diag(String(req.query.a || ''), String(req.query.b || ''))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/r/:code', sendIndex);
 
 io.on('connection', (socket) => {
