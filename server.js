@@ -20,7 +20,7 @@ const send = (f) => (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: 
 
 // Version calculée automatiquement à partir des fichiers du jeu : elle change à chaque mise à jour,
 // sans rien avoir à modifier à la main. Les navigateurs s'en servent pour se recharger tout seuls.
-const CLIENT_FILES = ['index.html', 'app.js', 'styles.css'];
+const CLIENT_FILES = ['index.html', 'app.js', 'styles.css', 'sw.js'];
 const VERSION = crypto.createHash('sha1').update(CLIENT_FILES.map((f) => fs.readFileSync(path.join(__dirname, f))).join('\n')).digest('hex').slice(0, 7);
 const UPDATED = new Date(Math.max(...CLIENT_FILES.map((f) => fs.statSync(path.join(__dirname, f)).mtimeMs)));
 const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
@@ -29,6 +29,9 @@ const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
 const sendIndex = (_, res) => { res.set('Cache-Control', 'no-cache, no-store, must-revalidate'); res.type('html').send(INDEX); };
 app.get('/', sendIndex);
 app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION }); });
+// Service worker : garde le jeu sur le téléphone pour l'ouvrir même quand le serveur dort.
+const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VERSION__/g, VERSION);
+app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
 
@@ -90,6 +93,8 @@ io.on('connection', (socket) => {
   socket.on('appeal', act(() => room.appeal(token)));
   socket.on('judge', act((d) => room.judge(token, !!d.ok)));
   socket.on('grant', act(() => room.grant(token)));
+  socket.on('joker', act(() => room.useJoker(token)));
+  socket.on('react', act((d) => room.react(token, String(d.e || ''))));
 
   socket.on('disconnect', () => {
     if (!room) return;

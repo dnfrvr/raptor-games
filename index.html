@@ -90,7 +90,7 @@
       <div class="clock" id="clock" role="timer" aria-label="Temps restant"><span id="clockNum">∞</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"/></svg></div>
       <div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>
     </div>
-    <div class="roundline"><span id="roundLabel">Manche 1</span><button class="link" id="muteBtn" type="button" aria-pressed="false">Son activé</button></div>
+    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="sfxBtn" type="button" aria-pressed="true">Effets : oui</button><button class="link" id="muteBtn" type="button" aria-pressed="false">Lecture auto : non</button></span></div>
 
     <section class="stage" aria-live="polite">
       <div class="current" id="current"></div>
@@ -104,16 +104,19 @@
         <input id="artistInput" placeholder="Nom de l'artiste" aria-label="Artiste" autocomplete="off" autocapitalize="words" enterkeyhint="send" role="combobox" aria-expanded="false" aria-controls="acList" aria-autocomplete="list">
         <ul class="ac-list" id="acList" role="listbox" hidden></ul>
       </div>
-      <input id="songInput" placeholder="Titre du son (facultatif, aide Deezer)" aria-label="Titre du son" autocomplete="off" enterkeyhint="send">
+      <input id="songInput" placeholder="Titre du son (+1 joker si juste)" aria-label="Titre du son" autocomplete="off" enterkeyhint="send">
       <div class="play-row">
         <button class="btn" id="submitBtn" type="submit">Valider</button>
         <button class="btn ghost" id="giveupBtn" type="button">Je sèche</button>
         <button class="btn ghost" id="randomBtn" type="button" hidden>Au hasard</button>
       </div>
+      <button class="btn joker-btn" id="jokerBtn" type="button" hidden>🃏 Joker</button>
       <div class="feedback" id="feedback" role="status" hidden></div>
     </form>
 
     <div class="watch" id="watch" hidden></div>
+
+    <div class="reacts" aria-label="Réactions"><button type="button" data-e="🔥" aria-label="Feu">🔥</button><button type="button" data-e="😂" aria-label="Mort de rire">😂</button><button type="button" data-e="💀" aria-label="Mort">💀</button><button type="button" data-e="😮" aria-label="Étonné">😮</button><button type="button" data-e="👏" aria-label="Bravo">👏</button></div>
 
     <section class="chain-wrap" aria-label="La chaîne">
       <h3 class="chain-title" id="chainTitle">La chaîne</h3>
@@ -141,6 +144,7 @@
       <p id="endText"></p>
       <div class="examples" id="endExamples" hidden></div>
       <div class="endscore" id="endScore"></div>
+      <div class="reacts" aria-label="Réactions"><button type="button" data-e="🔥" aria-label="Feu">🔥</button><button type="button" data-e="😂" aria-label="Mort de rire">😂</button><button type="button" data-e="💀" aria-label="Mort">💀</button><button type="button" data-e="😮" aria-label="Étonné">😮</button><button type="button" data-e="👏" aria-label="Bravo">👏</button></div>
       <div class="sheet-actions">
         <button class="btn big" id="endBtn" type="button"></button>
         <button class="btn ghost" id="stopBtn" type="button" hidden>Arrêter</button>
@@ -150,6 +154,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>
+  <div class="wake" id="wake" role="status" hidden><span class="spin"></span><span id="wakeText"></span></div>
   <audio id="audio" preload="none"></audio>
 
   <script src="/socket.io/socket.io.js"></script>

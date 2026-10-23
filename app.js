@@ -24,6 +24,8 @@
   let lastTurnKey = '';
   let lastMask = null;
   let lastOutKey = '';
+  let lastBonusId = null;
+  let lastMissKey = '';
 
   const socket = io({ transports: ['websocket', 'polling'] });
 
@@ -91,7 +93,36 @@
     const code = S?.code || (ownRoom ? roomCode : null);
     if (code) socket.emit('join', { token, code, name: null });
   });
-  socket.on('disconnect', () => { if (S) toast('Connexion perdue, reconnexion…', 6000); });
+  // Tant que le serveur ne répond pas (il dort après 15 min sans visite), on l'indique et on bloque les boutons.
+  let wakeTimer = null, wakeStart = 0;
+  function showWake() {
+    if (wakeTimer) return;
+    wakeStart = Date.now();
+    const tick = () => {
+      const s = Math.round((Date.now() - wakeStart) / 1000);
+      $('#wake').hidden = false;
+      $('#wakeText').textContent = S
+        ? `Connexion perdue, reconnexion… ${s} s`
+        : `Le serveur se réveille, ça peut prendre jusqu’à une minute… ${s} s`;
+    };
+    wakeTimer = setInterval(tick, 1000);
+    setTimeout(() => { if (wakeTimer) tick(); }, 1200); // on n'affiche rien si la connexion arrive tout de suite
+    $('#homeBtn').disabled = true; $('#soloBtn').disabled = true;
+  }
+  function hideWake() {
+    clearInterval(wakeTimer); wakeTimer = null;
+    $('#wake').hidden = true;
+    $('#homeBtn').disabled = false; $('#soloBtn').disabled = false;
+  }
+  if (!socket.connected) showWake();
+  socket.on('connect', hideWake);
+  socket.on('disconnect', showWake);
+  socket.on('connect_error', showWake);
+
+  // Garde le jeu sur le téléphone : l'accueil s'ouvre tout de suite, même quand le serveur dort.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  }
 
   socket.on('oops', (msg) => {
     toast(msg);
@@ -242,7 +273,7 @@
     document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
       const i = Number(el.dataset.p);
       const p = S.players[i] || { name: '—', score: 0, online: false };
-      el.querySelector('.pname').textContent = p.name;
+      el.querySelector('.pname').textContent = p.name + (p.jokers ? ` 🃏${p.jokers}` : '');
       el.querySelector('.pscore').textContent = p.score;
       el.classList.toggle('active', !!r && S.phase === 'playing' && r.turn === i);
       el.classList.toggle('off', !p.online);
@@ -326,12 +357,15 @@
     $('#songInput').hidden = choosing;
     $('#giveupBtn').hidden = choosing;
     $('#randomBtn').hidden = !choosing;
+    // Joker : visible pendant ton tour si tu en as au moins un.
+    $('#jokerBtn').hidden = choosing || !(S.jokers > 0);
+    $('#jokerBtn').textContent = `🃏 Joker : un rappeur à ma place (${S.jokers})`;
     $('#artistInput').placeholder = choosing ? 'Un artiste pour lancer la chaîne' : `Un artiste qui a fait un son avec ${cur ? cur.name : ''}`;
     $('#submitBtn').textContent = choosing ? 'Lancer' : 'Valider';
     if (myTurn) {
       const out = !choosing && (r.tries || 0) >= (r.maxTries || 3); // plus d'essais
       $('#artistInput').disabled = busy || out; $('#songInput').disabled = busy || out;
-      $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
+      $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy; $('#jokerBtn').disabled = busy;
       resetGiveUp();
       renderFeedback(r, cur, opp, oppTo);
     }
@@ -341,6 +375,7 @@
     if (!myTurn && playing) {
       let txt = `<span class="dots">${choosing ? 'Choix en cours' : 'Recherche en cours'}</span>`;
       if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
+      else if (r.checking && r.checking.joker) txt = `<span class="spin"></span>${esc(turnName)} utilise un joker 🃏`;
       else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
       const triesTxt = r.tries ? ` Essai ${r.tries} sur ${r.maxTries || 3} raté.` : '';
@@ -369,18 +404,37 @@
       $('#chainTitle').textContent = r.chain.length ? `La chaîne, ${plural(n, 'feat')}` : 'La chaîne';
       $('#chain').innerHTML = r.chain.length ? r.chain.map((l, i) => {
         const who = esc(S.players[l.by]?.name || '');
-        const detail = i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`;
+        const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">⭐ rare</span>' : '') + (l.joker ? ' <span class="tag">🃏 joker</span>' : '');
+        const detail = (i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
       bindTracks();
       lastChainLen = r.chain.length;
     }
 
+    // Sons : feat validé, mauvaise réponse (chez tout le monde).
+    if (newLink && r.chain.length > 1 && lastChainLen !== -1) sfx.ding();
+    const missKey = r.lastError && ['used', 'notfound', 'refused'].includes(r.lastError.why) ? `${r.id}-${r.chain.length}-${r.tries}-${r.lastError.why}-${r.lastError.artist.name}` : '';
+    if (missKey && missKey !== lastMissKey) sfx.buzz();
+    lastMissKey = missKey;
+
+    // Jokers gagnés (feat rare, bon titre).
+    const b = r.lastBonus;
+    if (b && b.id !== lastBonusId) {
+      if (lastBonusId !== null) {
+        const n = (b.rare ? 1 : 0) + (b.title ? 1 : 0);
+        const why = [b.rare && 'feat rare ⭐', b.title && 'bon titre 🎯'].filter(Boolean).join(' + ');
+        toast(`${b.who === S.me ? 'Tu gagnes' : S.players[b.who].name + ' gagne'} ${n} joker${n > 1 ? 's' : ''} 🃏 (${why})`, 3500);
+        sfx.bonus();
+      }
+      lastBonusId = b.id;
+    } else if (lastBonusId === null) lastBonusId = b ? b.id : 0;
     // Annonce des éliminations pendant la manche (à 3 et plus).
     const outKey = `${r.id}-${(r.out || []).length}`;
     if (outKey !== lastOutKey) {
       if (lastOutKey && r.out && r.out.length && S.phase === 'playing') {
         const o = r.lastOut, me = o.who === S.me, nm = S.players[o.who].name;
+        sfx.out();
         toast(o.reason === 'timeout' ? `Temps écoulé pour ${me ? 'toi' : nm} : éliminé de la manche`
           : o.reason === 'tries' ? `${me ? 'Tu as' : nm + ' a'} raté 3 essais : éliminé de la manche`
           : `${me ? 'Tu as' : nm + ' a'} séché : éliminé de la manche`, 3500);
@@ -393,6 +447,11 @@
 
   function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
+    if (r.checking && r.checking.joker) {
+      fb.hidden = false; fb.className = 'feedback info';
+      fb.innerHTML = `<span class="spin"></span>Le joker cherche un rappeur pour toi…`;
+      return;
+    }
     if (r.checking && r.checking.random) {
       fb.hidden = false; fb.className = 'feedback info';
       fb.innerHTML = `<span class="spin"></span>Tirage d'un rappeur français…`;
@@ -422,13 +481,14 @@
     const msg = {
       used: `<b>${esc(e.artist.name)}</b> est déjà dans la chaîne. Trouve quelqu'un d'autre.`,
       random: 'Le tirage n’a pas marché : Deezer ne répond pas. Réessaie ou tape un artiste.',
+      joker: `Le joker n’a trouvé aucun rappeur pour ${esc(cur ? cur.name : '')}. Ton joker est conservé.`,
       notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande ${esc(oppTo)} de le valider. Sinon, propose quelqu'un d'autre.`,
       refused: `<b>${esc(e.artist.name)}</b> a été refusé. Propose un autre artiste.`,
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
     const canAppeal = e.why === 'notfound' || e.why === 'api';
     const max = r.maxTries || 3, left = max - (r.tries || 0);
-    const triesMsg = e.why === 'api' || e.why === 'random' ? ''
+    const triesMsg = e.why === 'api' || e.why === 'random' || e.why === 'joker' ? ''
       : left <= 0 ? ''
       : ` Encore ${left} essai${left > 1 ? 's' : ''}.`;
     const body = left <= 0 && e.why === 'notfound'
@@ -492,7 +552,10 @@
     const stop = $('#stopBtn');
     stop.hidden = fin || S.settings.target !== 0;
     armTwoTap(stop, 'Arrêter', 'Sûr ?', () => socket.emit('stop'));
-    if (wasHidden) setTimeout(() => btn.focus({ preventScroll: true }), 60);
+    if (wasHidden) {
+      setTimeout(() => btn.focus({ preventScroll: true }), 60);
+      if (r.winner === S.me || (fin && w === S.me)) sfx.win(); else sfx.out();
+    }
   }
 
   // ================= PISTES / AUDIO =================
@@ -554,6 +617,7 @@
   audio.volume = 0.6;
   let audioUnlocked = false;
   function unlockAudio() {
+    sfx.unlock();
     if (audioUnlocked) return;
     audioUnlocked = true;
     try { audio.muted = true; audio.play().catch(() => {}).finally(() => { audio.pause(); audio.muted = false; }); } catch {}
@@ -577,6 +641,53 @@
   syncMute();
   $('#muteBtn').onclick = () => { muted = !muted; store.set('rg_autoplay', muted ? '0' : '1'); if (muted) audio.pause(); syncMute(); };
 
+  // ================= EFFETS SONORES =================
+  // Sons synthétisés par le navigateur (aucun fichier à télécharger). Réglage à part de la lecture des extraits.
+  const sfx = (() => {
+    let ctx = null;
+    let on = store.get('rg_sfx', '1') === '1';
+    const ac = () => {
+      try {
+        if (!ctx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; ctx = new C(); }
+        if (ctx.state === 'suspended') ctx.resume();
+      } catch { return null; }
+      return ctx;
+    };
+    function tone(freq, dur, { type = 'square', vol = 0.06, at = 0, to = null } = {}) {
+      const c = on && ac();
+      if (!c) return;
+      const t0 = c.currentTime + at;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(c.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    return {
+      get on() { return on; },
+      toggle() { on = !on; store.set('rg_sfx', on ? '1' : '0'); if (on) ac(); return on; },
+      unlock() { if (on) ac(); },
+      tick() { tone(1250, 0.045, { vol: 0.035 }); },
+      ding() { tone(880, 0.09, { type: 'triangle', vol: 0.09 }); tone(1320, 0.16, { type: 'triangle', vol: 0.09, at: 0.08 }); },
+      buzz() { tone(150, 0.32, { type: 'sawtooth', vol: 0.05 }); },
+      out() { tone(420, 0.18, { type: 'sawtooth', vol: 0.05, to: 200 }); tone(210, 0.32, { type: 'sawtooth', vol: 0.05, at: 0.16, to: 90 }); },
+      win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, { type: 'triangle', vol: 0.08, at: i * 0.1 })); },
+      bonus() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.06, at: i * 0.055 })); },
+      pop() { tone(660, 0.06, { type: 'sine', vol: 0.05, to: 990 }); },
+    };
+  })();
+  document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+  function syncSfx() {
+    $('#sfxBtn').textContent = sfx.on ? 'Effets : oui' : 'Effets : non';
+    $('#sfxBtn').setAttribute('aria-pressed', String(sfx.on));
+  }
+  $('#sfxBtn').onclick = () => { sfx.toggle(); syncSfx(); };
+  syncSfx();
+
   // ================= CHRONO =================
   function tickClock() {
     const el = $('#clock'), num = $('#clockNum'), circle = el.querySelector('circle');
@@ -592,7 +703,12 @@
     num.textContent = held ? '❚❚' : Math.ceil(left / 1000);
     circle.style.strokeDashoffset = 100 - (left / total) * 100;
     el.classList.toggle('hot', !r.paused && left < 5000);
+    // Tic-tac sur les 5 dernières secondes de MON tour.
+    const sec = Math.ceil(left / 1000);
+    if (!r.paused && r.turn === S.me && sec <= 5 && sec > 0 && sec !== lastTickSec) sfx.tick();
+    lastTickSec = r.paused ? null : sec;
   }
+  let lastTickSec = null;
   setInterval(tickClock, 200);
 
   // ================= AUTOCOMPLÉTION =================
@@ -695,6 +811,28 @@
   }
 
   $('#randomBtn').onclick = () => socket.emit('randomStart');
+
+  // ================= RÉACTIONS =================
+  // 5 emojis visibles chez tout le monde ; une réaction toutes les 2 s par joueur (aussi limité côté serveur).
+  let reactLock = false;
+  document.querySelectorAll('.reacts button').forEach((b) => (b.onclick = () => {
+    if (reactLock) return;
+    reactLock = true;
+    document.querySelectorAll('.reacts').forEach((el) => el.classList.add('cool'));
+    setTimeout(() => { reactLock = false; document.querySelectorAll('.reacts').forEach((el) => el.classList.remove('cool')); }, 2000);
+    socket.emit('react', { e: b.dataset.e });
+  }));
+  socket.on('reaction', ({ who, e }) => {
+    if (!S || !S.players[who]) return;
+    const el = document.createElement('div');
+    el.className = `float p${who}`;
+    el.innerHTML = `<span class="e">${esc(e)}</span><span class="n">${esc(who === S.me ? 'Toi' : S.players[who].name)}</span>`;
+    el.style.left = `${12 + Math.random() * 70}%`;
+    document.body.appendChild(el);
+    sfx.pop();
+    setTimeout(() => el.remove(), 2600);
+  });
+  $('#jokerBtn').onclick = () => socket.emit('joker');
   $('#judgeYes').onclick = () => socket.emit('judge', { ok: true });
   $('#judgeNo').onclick = () => socket.emit('judge', { ok: false });
 

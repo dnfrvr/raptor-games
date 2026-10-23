@@ -144,17 +144,58 @@ async function getTrack(id) {
  * a, b : { id, name } ; songHint : titre optionnel donné par le joueur.
  * Renvoie la piste trouvée ou null.
  */
+// Le titre donné par le joueur correspond-il au son ? (sans tenir compte de la partie feat, des accents ni de la casse)
+function baseTitle(title) {
+  return norm(String(title || '').replace(/[([][^)\]]*[)\]]/g, ' ').replace(/\s(?:feat\.?|ft\.?|featuring)\s.*$/i, ' '));
+}
+function titleMatches(t, hint) {
+  const h = norm(hint);
+  if (h.length < 2) return false;
+  const base = baseTitle(t.title_short || t.title);
+  return h === base || h === norm(t.title_short) || h === norm(t.title) || h === baseTitle(hint) && baseTitle(hint) === base;
+}
+
+const RARE_RANK = 30; // un feat est « rare » si son son n'est dans les 30 plus écoutés d'aucun des deux artistes
+
+/**
+ * Cherche un son où a et b apparaissent ensemble.
+ * Renvoie la piste (avec rare = feat peu connu, hinted = le titre donné par le joueur est le bon), ou null.
+ * Si le joueur a donné un titre, on essaie de prouver le feat avec CE son-là.
+ */
 async function findFeat(a, b, songHint) {
+  const hint = songHint && songHint.trim();
   // 1) Tops des deux artistes : Deezer y inclut les contributeurs, donc 0 appel supplémentaire par titre.
   const tops = await Promise.allSettled([
     get(`/artist/${a.id}/top?limit=100`),
     get(`/artist/${b.id}/top?limit=100`),
   ]);
+  const rankIn = tops.map((r) => {
+    const m = new Map();
+    if (r.status === 'fulfilled') (r.value.data || []).forEach((t, i) => m.set(t.id, i));
+    return m;
+  });
+  const isRare = (t) => rankIn.every((m) => !m.has(t.id) || m.get(t.id) >= RARE_RANK);
+  const result = (t) => ({ ...trackOut(t), rare: isRare(t), hinted: !!hint && titleMatches(t, hint) });
+
+  const provers = [];
   for (const r of tops) {
     if (r.status !== 'fulfilled') continue;
-    for (const t of r.value.data || []) if (proves(t, a, b)) return trackOut(t);
+    for (const t of r.value.data || []) if (proves(t, a, b) && !provers.some((x) => x.id === t.id)) provers.push(t);
   }
+  if (provers.length) {
+    const hinted = hint && provers.find((t) => titleMatches(t, hint));
+    if (hinted || !hint) return result(hinted || provers[0]);
+    // Titre donné mais pas parmi les gros sons : on cherche ce son précis avant de se rabattre sur le premier trouvé.
+    const precise = await findFeatDeep(a, b, hint, (t) => titleMatches(t, hint));
+    return result(precise || provers[0]);
+  }
+  const deep = await findFeatDeep(a, b, hint);
+  return deep ? result(deep) : null;
+}
 
+// Étapes 2 et 3 : recherche plein texte puis albums. `want` (facultatif) impose une condition sur le son trouvé.
+async function findFeatDeep(a, b, songHint, want = () => true) {
+  const ok = (t) => proves(t, a, b) && want(t);
   // 2) Recherche plein texte, puis détail des titres candidats (contributeurs complets).
   const queries = [];
   if (songHint && songHint.trim()) {
@@ -173,7 +214,7 @@ async function findFeat(a, b, songHint) {
       if (seen.has(t.id)) continue;
       seen.add(t.id);
       // Preuve immédiate via "feat." dans le titre
-      if (proves(t, a, b)) return trackOut(t);
+      if (ok(t)) return t;
       const mainIsOne = matches(t.artist, a) || matches(t.artist, b);
       const title = norm(t.title);
       const mentionsOther = title.includes(norm(a.name)) || title.includes(norm(b.name));
@@ -184,7 +225,7 @@ async function findFeat(a, b, songHint) {
   const toCheck = candidates.slice(0, 18).map((c) => c.t.id);
   const details = await Promise.allSettled(toCheck.map((id) => getTrack(id)));
   for (const d of details) {
-    if (d.status === 'fulfilled' && proves(d.value, a, b)) return trackOut(d.value);
+    if (d.status === 'fulfilled' && ok(d.value)) return d.value;
   }
 
   // 3) Dernier recours : les albums de l'artiste le plus "petit" (featurings hors top).
@@ -203,7 +244,7 @@ async function findFeat(a, b, songHint) {
       }
     }
     const det = await Promise.allSettled([...strong, ...weak].slice(0, 18).map((id) => getTrack(id)));
-    for (const d of det) if (d.status === 'fulfilled' && proves(d.value, a, b)) return trackOut(d.value);
+    for (const d of det) if (d.status === 'fulfilled' && ok(d.value)) return d.value;
   } catch (_) { /* ignore */ }
 
   return null;

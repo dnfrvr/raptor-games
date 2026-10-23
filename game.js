@@ -31,7 +31,8 @@ const BOT = {
 };
 const BOT_TOKEN = '__bot__';
 const MAX_PLAYERS = 8;
-const MAX_TRIES = 3;        // essais par tour
+const MAX_TRIES = 3;
+const REACTIONS = ['🔥', '😂', '💀', '😮', '👏'];        // essais par tour
 const AFTER_MISS_MS = 10000; // temps minimum laissé après une mauvaise réponse
 
 class Room {
@@ -63,7 +64,7 @@ class Room {
     if (existing) { existing.name = name || existing.name; return existing; }
     // Nouveaux joueurs seulement dans le salon (un joueur déjà inscrit peut toujours revenir).
     if (this.phase !== 'lobby' || this.players.length >= (this.solo ? 2 : MAX_PLAYERS)) return null;
-    const p = { token, name: (name || 'Joueur').slice(0, 20), score: 0, sockets: new Set() };
+    const p = { token, name: (name || 'Joueur').slice(0, 20), score: 0, jokers: 0, sockets: new Set() };
     this.players.push(p);
     return p;
   }
@@ -84,7 +85,7 @@ class Room {
     if (this.players.length < 2 || this.idx(token) < 0) return;
     if (this.phase === 'lobby' && token !== this.hostToken) return;
     if (this.phase !== 'lobby' && this.phase !== 'finished') return;
-    this.players.forEach((p) => (p.score = 0));
+    this.players.forEach((p) => { p.score = 0; p.jokers = 0; });
     this.roundNo = 0;
     this.history = [];
     this.final = null;
@@ -301,6 +302,41 @@ class Room {
     }
   }
 
+  // Joker : le jeu trouve un rappeur à la place du joueur (un feat connu de l'artiste en jeu, pas encore cité).
+  async useJoker(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    const p = this.players[i];
+    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal || this.choosing() || !p || !(p.jokers > 0)) return;
+    r.checking = { artist: { name: 'Joker' }, joker: true };
+    this.pauseClock();
+    this.broadcast();
+    let options = [];
+    try { options = (await deezer.findCollaborators(this.current(), 100)).filter((o) => !this.usedArtist(o.artist)); } catch (e) { console.error('joker', e.message); }
+    if (this.round !== r || this.phase !== 'playing' || r.turn !== i) return;
+    r.checking = false;
+    if (!options.length) {
+      r.lastError = { artist: { name: 'Joker' }, why: 'joker' };
+      this.startClock();
+      return this.broadcast();
+    }
+    p.jokers--;
+    // Parmi les 5 feats les plus connus, pour que le joker reste crédible.
+    const pick = options[Math.floor(Math.random() * Math.min(5, options.length))];
+    this.accept(pick.artist, { ...pick.track, joker: true, rare: false, hinted: false }, false);
+  }
+
+  // Réactions emoji : relayées à tous, une toutes les 2 s par joueur.
+  react(token, e) {
+    const i = this.idx(token);
+    if (i < 0 || !REACTIONS.includes(e)) return;
+    const p = this.players[i];
+    const now = Date.now();
+    if (p.lastReact && now - p.lastReact < 1900) return;
+    p.lastReact = now;
+    this.emitAll('reaction', { who: i, e });
+  }
+
   // Mauvaise réponse : un essai de moins, et au moins 10 s au chrono.
   // Au 3e essai raté, la manche est perdue, sauf si le feat peut encore être validé à la main.
   miss() {
@@ -323,7 +359,17 @@ class Room {
 
   accept(a, track, byAppeal) {
     const r = this.round;
-    r.chain.push({ artist: a, by: r.turn, track, byAppeal });
+    // Jokers : +1 pour un feat rare, +1 pour le bon titre du son (cumulables).
+    // Pas pour un feat validé à la main, joué par un joker, ou trouvé par le bot.
+    const p = this.players[r.turn];
+    const bonus = { who: r.turn, rare: false, title: false, id: Date.now() };
+    if (!byAppeal && !track.joker && !p.bot) {
+      bonus.rare = !!track.rare;
+      bonus.title = !!track.hinted;
+      p.jokers = (p.jokers || 0) + (bonus.rare ? 1 : 0) + (bonus.title ? 1 : 0);
+    }
+    r.lastBonus = bonus.rare || bonus.title ? bonus : r.lastBonus || null;
+    r.chain.push({ artist: a, by: r.turn, track, byAppeal, rare: !byAppeal && !track.joker && !!track.rare, joker: !!track.joker });
     r.turn = this.nextAlive(r.turn);
     r.lastError = null;
     r.appeal = null;
@@ -383,13 +429,14 @@ class Room {
       code: this.code,
       solo: this.solo,
       maxPlayers: this.solo ? 2 : MAX_PLAYERS,
+      jokers: this.players[me] ? this.players[me].jokers || 0 : 0,
       me,
       host: this.idx(this.hostToken),
       phase: this.phase,
       final: this.final,
       settings: this.settings,
       roundNo: this.roundNo,
-      players: this.players.map((p) => ({ name: p.name, score: p.score, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
+      players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: this.round && {
         ...this.round,
         deadline: undefined,

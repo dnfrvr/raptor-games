@@ -21,8 +21,10 @@ const tracks = [
   [112, 'Tchikita (feat. TH)', 'Jul', []],
   // Francisco écrit seulement dans le titre (pas crédité) : doit être flouté pendant la manche.
   [113, 'Club (feat. Francisco)', 'Naps', ['Gims']],
-].map(([id, title, main, feats]) => ({
-  id, title, title_short: title, preview: null, link: '#',
+  // Feat rare : absent des tops des deux artistes, trouvé seulement par la recherche.
+  [114, 'Face B (feat. Damso)', 'Niska', [], true],
+].map(([id, title, main, feats, deep]) => ({
+  id, title, title_short: title, preview: null, link: '#', deep: !!deep,
   album: { title, cover_medium: null },
   artist: A(main),
   contributors: [{ ...A(main), role: 'Main' }, ...feats.map((f) => ({ ...A(f), role: 'Featured' }))],
@@ -34,7 +36,7 @@ function route(path) {
   const words = q.split(/\s+/).filter(Boolean);
   let m;
   if (u.pathname === '/search/artist') return { data: artists.filter((a) => a.name.toLowerCase().includes(q.trim())) };
-  if ((m = u.pathname.match(/^\/artist\/(\d+)\/top$/))) return { data: tracks.filter((t) => t.contributors.some((c) => c.id === +m[1])) };
+  if ((m = u.pathname.match(/^\/artist\/(\d+)\/top$/))) return { data: tracks.filter((t) => !t.deep && t.contributors.some((c) => c.id === +m[1])) };
   if ((m = u.pathname.match(/^\/artist\/(\d+)\/albums$/))) return { data: [{ id: 9000 + +m[1] }] };
   if ((m = u.pathname.match(/^\/album\/9(\d{3})\/tracks$/))) return { data: tracks.filter((t) => t.artist.id === +m[1]).map(({ contributors, ...t }) => t) };
   if ((m = u.pathname.match(/^\/artist\/(\d+)$/))) return artists.find((a) => a.id === +m[1]);
