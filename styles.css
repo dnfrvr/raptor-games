@@ -380,3 +380,8 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 .scorebug .side.me .pname { text-decoration-thickness: 2px; text-underline-offset: 2px; }
 /* Pas de soulignage sur son propre pseudo : la couleur suffit */
 .scorebug .side.me .pname, .roster .pl.me .pname { text-decoration: none; }
+/* Ronds de la chaîne bien centrés sur la ligne (la bordure est comptée dans la taille du rond) */
+.chain li::before { box-sizing: border-box; top: 4px; }
+/* Bouton play centré verticalement en tenant compte de son ombre portée (4 px) */
+.track .play-btn, .examples li .play-btn { margin-top: -4px; }
+.chain li::before { width: 24px; height: 24px; left: -26px; top: 2px; }
