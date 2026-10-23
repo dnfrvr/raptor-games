@@ -385,3 +385,57 @@ body.sheet-open .play, body.sheet-open .turn, body.sheet-open .watch { display: 
 /* Bouton play centré verticalement en tenant compte de son ombre portée (4 px) */
 .track .play-btn, .examples li .play-btn { margin-top: -4px; }
 .chain li::before { width: 24px; height: 24px; left: -26px; top: 2px; }
+
+/* ---------- K.O. (façon jeu de combat) ---------- */
+.ko { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #2a0610ee 0, #050b20f2 60%); }
+.ko-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.ko-burst { position: absolute; left: 50%; top: 42%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; opacity: 0; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, #ffd21f22 0deg 7deg, transparent 7deg 18deg, #d90b2c1f 18deg 24deg, transparent 24deg 36deg); }
+.ko-inner { position: relative; text-align: center; width: 100%; max-width: 440px; }
+.ko-word { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(120px, 44vw, 230px); line-height: .85; letter-spacing: -.02em; display: flex; justify-content: center; }
+.ko-word span { display: inline-block; color: var(--yellow); -webkit-text-stroke: 6px #050b20; paint-order: stroke fill;
+  text-shadow: 0 8px 0 var(--red), 0 16px 0 #050b20, 0 0 40px #ffd21f88; }
+.ko-word span:nth-child(even) { color: var(--red); text-shadow: 0 8px 0 var(--yellow-edge), 0 16px 0 #050b20; }
+.ko-sub { margin: 18px 0 0; font-size: 17px; color: var(--paper); opacity: 0; }
+.ko-sub b { color: var(--yellow); }
+.ko-panel { margin-top: 16px; opacity: 0; display: grid; gap: 10px; justify-items: center; }
+.ko-panel .btn.big { margin-top: 4px; }
+.ko-panel .small { color: #d6def5; }
+
+/* Entrée : flash blanc, éclats qui tournent, lettres qui s'écrasent l'une après l'autre */
+.ko.ko-in .ko-flash { animation: koFlash .45s ease-out; }
+.ko.ko-in .ko-burst { animation: koBurstIn .5s .1s ease-out forwards, koSpin 14s linear infinite; }
+.ko.ko-in .ko-word span { animation: koSlam .42s cubic-bezier(.2, 1.6, .35, 1) both; }
+.ko.ko-in .ko-word span:nth-child(1) { animation-delay: .12s; }
+.ko.ko-in .ko-word span:nth-child(2) { animation-delay: .22s; }
+.ko.ko-in .ko-word span:nth-child(3) { animation-delay: .4s; }
+.ko.ko-in .ko-word span:nth-child(4) { animation-delay: .5s; }
+.ko.again .ko-word span { animation: koSlam .35s cubic-bezier(.2, 1.6, .35, 1) both; }
+.ko.again .ko-burst { opacity: .7; animation: koSpin 14s linear infinite; }
+/* Puis tout se pose : le K.O. remonte un peu et le texte apparaît */
+.ko.settled .ko-word { animation: koSettle .45s ease-out forwards; }
+.ko.settled .ko-sub { animation: koFadeUp .4s ease-out forwards; }
+.ko.settled .ko-panel { animation: koFadeUp .4s .15s ease-out forwards; }
+@keyframes koFlash { 0% { opacity: .95; } 100% { opacity: 0; } }
+@keyframes koBurstIn { from { opacity: 0; transform: scale(.4); } to { opacity: .8; transform: scale(1); } }
+@keyframes koSpin { to { rotate: 360deg; } }
+@keyframes koSlam { 0% { transform: scale(4) rotate(-14deg); opacity: 0; } 60% { opacity: 1; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+@keyframes koSettle { to { transform: translateY(-6px) scale(.86); } }
+@keyframes koFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* L'écran de jeu tremble sous l'impact */
+.ko-shake { animation: koShake .55s cubic-bezier(.36, .07, .19, .97) .12s; }
+@keyframes koShake { 10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(5px, -3px); } 30%, 50%, 70% { transform: translate(-9px, 4px); } 40%, 60% { transform: translate(9px, -4px); } }
+body.ko-open .reacts { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .ko .ko-sub, .ko .ko-panel { opacity: 1 !important; }
+  .ko .ko-burst { opacity: .5 !important; }
+}
+
+/* À deux : la couleur du joueur actif continue jusque sous le centre du chrono */
+.scorebug:not(.multi) .clock { margin: 0 -35px; }
+.scorebug:not(.multi) .side[data-p="0"] { padding-right: 46px; }
+.scorebug:not(.multi) .side[data-p="1"] { padding-left: 46px; }
+
+.ko-jokers { display: inline-block; font-size: 14px; font-weight: 700; color: var(--night); background: var(--paper); padding: 4px 12px; border-radius: var(--r); box-shadow: 0 3px 0 #a9b6d9; }
+.ko-jokers b { font-family: var(--display); font-weight: 400; font-size: 18px; }

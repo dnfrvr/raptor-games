@@ -410,7 +410,7 @@
       $('#chainTitle').textContent = r.chain.length ? `La chaîne, ${plural(n, 'feat')}` : 'La chaîne';
       $('#chain').innerHTML = r.chain.length ? r.chain.map((l, i) => {
         const who = esc(S.players[l.by]?.name || '');
-        const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">⭐ Rare</span>' : '') + (l.joker ? ' <span class="tag">🃏 Joker</span>' : '');
+        const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">Rare</span>' : '') + (l.joker ? ' <span class="tag">Joker</span>' : '') + (l.relaunch ? ' <span class="tag">Relance</span>' : '');
         const detail = (i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
@@ -443,10 +443,12 @@
         sfx.out();
         toast(o.reason === 'timeout' ? `Temps écoulé pour ${me ? 'toi' : nm} : éliminé de la manche`
           : o.reason === 'tries' ? `${me ? 'Tu as' : nm + ' a'} raté 3 essais : éliminé de la manche`
+          : o.reason === 'ko' ? `${me ? 'Tu es' : nm + ' est'} K.O. : éliminé de la manche`
           : `${me ? 'Tu as' : nm + ' a'} séché : éliminé de la manche`, 3500);
       }
       lastOutKey = outKey;
     }
+    renderKO(r);
     renderEnd(r, cur);
     tickClock();
   }
@@ -504,6 +506,60 @@
     if (canAppeal) $('#appealBtn').onclick = () => socket.emit('appeal');
   }
 
+  // ================= K.O. =================
+  // Plus aucun feat possible avec l'artiste en jeu : écran K.O. façon jeu de combat, puis le choix du joueur mis K.O.
+  let koShownId = null, koVictimAt = null;
+  function renderKO(r) {
+    const el = $('#ko');
+    const ko = S.phase === 'playing' && r.ko;
+    if (!ko) { el.hidden = true; el.classList.remove('ko-in', 'settled'); document.body.classList.remove('ko-open'); return; }
+    const first = ko.id !== koShownId;
+    const newVictim = ko.at !== koVictimAt;
+    koShownId = ko.id; koVictimAt = ko.at;
+    const victim = S.players[ko.victim], author = S.players[ko.by];
+    const meVictim = ko.victim === S.me;
+    $('#koSub').innerHTML = first || newVictim
+      ? `Plus aucun feat possible avec <b>${esc(ko.artist.name)}</b>.<br>${meVictim ? `<b>${esc(author?.name || '')}</b> te met K.O. !` : ko.by === S.me ? `Tu mets <b>${esc(victim?.name || '')}</b> K.O. !` : `<b>${esc(author?.name || '')}</b> met <b>${esc(victim?.name || '')}</b> K.O. !`}`
+      : $('#koSub').innerHTML;
+    const panel = $('#koPanel');
+    let html = '';
+    const relaunching = r.checking && r.checking.relaunch;
+    if (relaunching) {
+      html = `<p class="small"><span class="spin"></span>${meVictim ? 'Tirage de ton rappeur…' : esc(victim.name) + ' relance avec un rappeur au hasard…'}</p>`;
+    } else if (meVictim && ko.canRelaunch) {
+      html = `<p class="small">Tu peux relancer avec un rappeur au hasard pour ${ko.cost} jokers.</p>
+        <span class="ko-jokers">Tes jokers : <b>${S.jokers}</b></span>
+        <button type="button" class="btn big" id="koRelaunch">Relancer · ${ko.cost} 🃏</button>
+        <button type="button" class="link" id="koGiveUp">Abandonner la manche</button>`;
+    } else if (meVictim) {
+      html = `<p class="small">Il te faudrait ${ko.cost} jokers pour relancer. Tu es éliminé de la manche.</p>
+        <span class="ko-jokers">Tes jokers : <b>${S.jokers}</b></span>`;
+    } else {
+      html = `<p class="small">${ko.canRelaunch ? `${esc(victim.name)} peut relancer avec ${ko.cost} jokers…` : `${esc(victim.name)} est éliminé de la manche.`}</p>`;
+    }
+    // On ne réécrit le panneau que s'il change : sinon un appui pourrait tomber pendant une mise à jour et se perdre.
+    if (panel.dataset.html !== html) {
+      panel.dataset.html = html;
+      panel.innerHTML = html;
+      const rl = $('#koRelaunch'), gu = $('#koGiveUp');
+      if (rl) rl.onclick = () => { rl.disabled = true; socket.emit('koRelaunch'); };
+      if (gu) gu.onclick = () => socket.emit('koGiveUp');
+    }
+    if (first || newVictim) {
+      el.hidden = false;
+      document.body.classList.add('ko-open');
+      el.classList.remove('ko-in', 'settled', 'again'); void el.offsetWidth;
+      el.classList.add(first ? 'ko-in' : 'again');
+      if (first) {
+        sfx.ko();
+        const g = $('#game'); g.classList.remove('ko-shake'); void g.offsetWidth; g.classList.add('ko-shake');
+        if (navigator.vibrate) try { navigator.vibrate([80, 40, 160]); } catch {}
+      }
+      clearTimeout(renderKO.t);
+      renderKO.t = setTimeout(() => el.classList.add('settled'), first ? 1500 : 500);
+    }
+  }
+
   function renderEnd(r, cur) {
     const ended = S.phase === 'roundEnd' || S.phase === 'finished';
     const sheet = $('#endSheet');
@@ -525,10 +581,10 @@
     $('#endKicker').textContent = fin ? (stopped ? `Partie arrêtée après ${plural(S.roundNo, 'manche')}` : 'Fin de la partie') : `Fin de la manche ${S.roundNo}`;
     $('#endTitle').textContent = fin ? (w == null ? 'Égalité' : won ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (won ? 'Manche pour toi' : `Manche pour ${S.players[r.winner].name}`);
     sheet.classList.toggle('win', w === S.me);
-    const why = r.reason === 'timeout' ? `${loserName} n'a pas répondu à temps` : r.reason === 'tries' ? `${loserName} a raté ses ${r.maxTries || 3} essais` : `${loserName} a séché`;
+    const why = r.reason === 'timeout' ? `${loserName} n'a pas répondu à temps` : r.reason === 'tries' ? `${loserName} a raté ses ${r.maxTries || 3} essais` : r.reason === 'ko' ? `${loserName} est K.O., plus aucun feat possible` : `${loserName} a séché`;
     $('#endText').textContent = stopped
       ? (w == null ? 'Score parfaitement égal.' : `Score final en faveur de ${S.players[w].name}.`)
-      : (lastOut.on ? `${why} sur ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.` : `${why} avant même de poser l'artiste de départ.`)
+      : (lastOut.on ? (r.reason === 'ko' ? `${why} avec ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.` : `${why} sur ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.`) : `${why} avant même de poser l'artiste de départ.`)
         + (N > 2 ? (r.winner === S.me ? ' Tu es le dernier en jeu.' : ` ${S.players[r.winner].name} est le dernier en jeu.`) : '');
     $('#endScore').innerHTML = N === 2
       ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
@@ -684,6 +740,19 @@
       win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, { type: 'triangle', vol: 0.08, at: i * 0.1 })); },
       bonus() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.09, { type: 'triangle', vol: 0.06, at: i * 0.055 })); },
       pop() { tone(660, 0.06, { type: 'sine', vol: 0.05, to: 990 }); },
+      // Gros impact de K.O. : souffle de bruit + coup grave qui descend, puis deux notes de « fin de round ».
+      ko() {
+        const c = on && ac();
+        if (!c) return;
+        const len = 0.5, buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+        const n = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 1400; g.gain.value = 0.35;
+        n.buffer = buf; n.connect(f).connect(g).connect(c.destination); n.start();
+        tone(160, 0.6, { type: 'sine', vol: 0.4, to: 38 });
+        tone(330, 0.22, { type: 'square', vol: 0.05, at: 0.55 });
+        tone(220, 0.5, { type: 'square', vol: 0.05, at: 0.78, to: 110 });
+      },
     };
   })();
   document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });

@@ -32,7 +32,10 @@ const BOT = {
 const BOT_TOKEN = '__bot__';
 const MAX_PLAYERS = 8;
 const MAX_TRIES = 3;
-const REACTIONS = ['🔥', '😂', '💀', '😮', '👏'];        // essais par tour
+const REACTIONS = ['🔥', '😂', '💀', '😮', '👏'];
+const KO_RELAUNCH_COST = 5;   // jokers pour relancer après un K.O.
+const KO_DECIDE_MS = 15000;   // temps pour choisir de relancer
+const KO_SHOW_MS = 4000;      // durée de l'écran K.O. avant élimination quand on ne peut pas relancer        // essais par tour
 const AFTER_MISS_MS = 10000; // temps minimum laissé après une mauvaise réponse
 
 class Room {
@@ -154,10 +157,89 @@ class Room {
     if (alive.length <= 1) return this.endRound(alive.length ? alive[0] : this.nextAlive(i), reason);
     clearTimeout(this.timer);
     clearTimeout(this.botTimer); this.botKey = '';
+    clearTimeout(this.koTimer);
     r.turn = this.nextAlive(i);
     r.tries = 0; r.lastError = null; r.appeal = null; r.checking = false;
+    // Toujours la même impasse : le joueur suivant est K.O. à son tour.
+    if (r.ko) return this.koVictim();
     this.resetClock();
     this.broadcast();
+  }
+
+  // ---------- K.O. ----------
+  // Après chaque nouveau maillon : s'il n'existe plus aucun feat possible avec l'artiste en jeu
+  // (aucun artiste de ses sons Deezer qui ne soit pas déjà cité), le joueur suivant est K.O.
+  async checkKO() {
+    const r = this.round;
+    const len = r.chain.length;
+    const cur = this.current();
+    if (!cur || !cur.id || r.ko) return;
+    let options;
+    try { options = (await deezer.findCollaborators(cur, 100)).filter((o) => !this.usedArtist(o.artist)); } catch (e) { return; }
+    if (this.round !== r || this.phase !== 'playing' || r.chain.length !== len || options.length) return;
+    r.ko = { id: Date.now(), by: r.chain[len - 1].by, artist: { id: cur.id, name: cur.name } };
+    this.koVictim();
+  }
+
+  koVictim() {
+    const r = this.round;
+    clearTimeout(this.timer);
+    clearTimeout(this.botTimer); this.botKey = '';
+    clearTimeout(this.koTimer);
+    r.deadline = null;
+    r.checking = false; r.appeal = null; r.lastError = null;
+    const victim = r.turn;
+    const p = this.players[victim];
+    r.ko.victim = victim;
+    r.ko.at = Date.now();
+    r.ko.canRelaunch = !p.bot && (p.jokers || 0) >= KO_RELAUNCH_COST;
+    r.ko.cost = KO_RELAUNCH_COST;
+    r.ko.decideMs = r.ko.canRelaunch ? KO_DECIDE_MS : KO_SHOW_MS;
+    this.koTimer = setTimeout(() => {
+      if (this.round === r && this.phase === 'playing' && r.ko && r.ko.victim === victim) this.eliminate(victim, 'ko');
+    }, r.ko.decideMs);
+    this.broadcast();
+  }
+
+  // K.O. : le joueur abandonne tout de suite.
+  koGiveUp(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    if (this.phase !== 'playing' || !r || !r.ko || r.ko.victim !== i) return;
+    clearTimeout(this.koTimer);
+    this.eliminate(i, 'ko');
+  }
+
+  // K.O. : pour 5 jokers, un rappeur français tiré au hasard compte comme sa réponse, et la partie continue.
+  async koRelaunch(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    const p = this.players[i];
+    if (this.phase !== 'playing' || !r || !r.ko || r.ko.victim !== i || r.checking || !p || (p.jokers || 0) < KO_RELAUNCH_COST) return;
+    clearTimeout(this.koTimer);
+    p.jokers -= KO_RELAUNCH_COST;
+    r.checking = { artist: { name: 'au hasard' }, random: true, relaunch: true };
+    this.broadcast();
+    const pool = [...new Set(FR_RAPPERS)];
+    let found = null;
+    for (let tries = 0; tries < 10 && !found; tries++) {
+      const name = pool[Math.floor(Math.random() * pool.length)];
+      try {
+        const res = await deezer.searchArtists(name, 5);
+        const a = res.find((x) => deezer.norm(x.name) === deezer.norm(name)) || res[0];
+        if (a && !this.usedArtist(a)) found = a;
+      } catch (e) { console.error('relaunch', e.message); }
+    }
+    if (this.round !== r || this.phase !== 'playing') return;
+    r.checking = false;
+    if (!found) { p.jokers += KO_RELAUNCH_COST; return this.koVictim(); } // Deezer en panne : jokers rendus, on peut réessayer
+    r.ko = null;
+    r.chain.push({ artist: found, by: i, track: null, relaunch: true });
+    r.turn = this.nextAlive(i);
+    r.tries = 0; r.lastError = null;
+    this.resetClock();
+    this.broadcast();
+    this.checkKO();
   }
   current() { const c = this.round.chain; return c.length ? c[c.length - 1].artist : null; }
 
@@ -180,18 +262,19 @@ class Room {
   }
 
   timeout() {
-    if (this.phase !== 'playing' || this.round.checking || this.round.appeal || this.choosing()) return;
+    if (this.phase !== 'playing' || this.round.checking || this.round.appeal || this.round.ko || this.choosing()) return;
     this.eliminate(this.round.turn, 'timeout');
   }
 
   giveUp(token) {
     const i = this.idx(token);
-    if (this.phase !== 'playing' || i !== this.round.turn || this.round.checking || this.round.appeal || this.choosing()) return;
+    if (this.phase !== 'playing' || i !== this.round.turn || this.round.checking || this.round.appeal || this.round.ko || this.choosing()) return;
     this.eliminate(i, 'giveup');
   }
 
   endRound(winner, reason) {
     clearTimeout(this.timer);
+    clearTimeout(this.koTimer);
     clearTimeout(this.botTimer); this.botKey = '';
     this.round.winner = winner;
     this.round.reason = reason;
@@ -261,7 +344,7 @@ class Room {
   async answer(token, { artist, song }) {
     const i = this.idx(token);
     const r = this.round;
-    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal) return;
+    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal || r.ko) return;
     if (!artist || !artist.id || !artist.name) return;
     const a = { id: Number(artist.id), name: String(artist.name).slice(0, 80), picture: artist.picture || null };
 
@@ -307,7 +390,7 @@ class Room {
     const i = this.idx(token);
     const r = this.round;
     const p = this.players[i];
-    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal || this.choosing() || !p || !(p.jokers > 0)) return;
+    if (this.phase !== 'playing' || i !== r.turn || r.checking || r.appeal || r.ko || this.choosing() || !p || !(p.jokers > 0)) return;
     r.checking = { artist: { name: 'Joker' }, joker: true };
     this.pauseClock();
     this.broadcast();
@@ -378,6 +461,7 @@ class Room {
     this.resetClock();
     this.broadcast();
     this.emitAll('link', { track, artist: a });
+    this.checkKO();
   }
 
   // Deezer ne trouve rien ? Le joueur peut demander à l'adversaire de valider à la main.
@@ -456,7 +540,7 @@ class Room {
   // ---------- Bot (mode solo) ----------
   botTick() {
     const r = this.round;
-    if (this.phase !== 'playing' || !r || r.checking) return;
+    if (this.phase !== 'playing' || !r || r.checking || r.ko) return;
     const b = this.players.findIndex((p) => p.bot);
     // Le joueur demande au bot de valider un feat introuvable : le bot lui fait confiance.
     if (r.appeal && r.turn !== b) return this.botLater('judge', 1500, () => this.judge(BOT_TOKEN, true));

@@ -23,6 +23,8 @@ const tracks = [
   [113, 'Club (feat. Francisco)', 'Naps', ['Gims']],
   // Feat rare : absent des tops des deux artistes, trouvé seulement par la recherche.
   [114, 'Face B (feat. Damso)', 'Niska', [], true],
+  // Impasse : Huntrill n'a qu'un seul feat (avec Jul). Jul → Huntrill = plus rien à répondre : K.O.
+  [115, 'Impasse', 'Jul', ['Huntrill']],
 ].map(([id, title, main, feats, deep]) => ({
   id, title, title_short: title, preview: null, link: '#', deep: !!deep,
   album: { title, cover_medium: null },

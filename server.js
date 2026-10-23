@@ -99,6 +99,10 @@ io.on('connection', (socket) => {
   socket.on('grant', act(() => room.grant(token)));
   socket.on('joker', act(() => room.useJoker(token)));
   socket.on('react', act((d) => room.react(token, String(d.e || ''))));
+  socket.on('koRelaunch', act(() => room.koRelaunch(token)));
+  socket.on('koGiveUp', act(() => room.koGiveUp(token)));
+  // Tests uniquement (faux Deezer) : donner des jokers à un joueur.
+  if (process.env.DEEZER_MOCK) socket.on('debugJokers', act((d) => { const p = room.players[room.idx(token)]; if (p) { p.jokers = Number(d.n) || 0; room.broadcast(); } }));
 
   socket.on('disconnect', () => {
     if (!room) return;
