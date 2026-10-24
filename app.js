@@ -1043,8 +1043,8 @@
     const r = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
     const n = (a, b) => Math.round(a + r() * (b - a));
     const pick = new Set(combo);
-    const notch = () => (small ? { at: n(12, 68), d: n(2, 3), w: n(5, 7) } : { at: n(8, 78), d: n(3, 5), w: n(7, 10) });
-    const corner = () => (small ? n(2, 3) : n(2, 4));
+    const notch = () => (small ? { at: n(12, 68), d: n(3, 4), w: n(7, 9) } : { at: n(8, 78), d: n(4, 5), w: n(9, 12) });
+    const corner = () => (small ? n(4, 5) : n(6, 8)); // coins écornés : assez grands pour se voir
     const p = [];
     if (pick.has('tl')) { const c = corner(); p.push(`0 ${c}px`, `${c}px 0`); } else p.push('0 0');
     if (pick.has('top')) { const k = notch(); p.push(`${k.at}% 0`, `calc(${k.at}% + ${k.w / 2}px) ${k.d}px`, `calc(${k.at}% + ${k.w}px) 0`); }
