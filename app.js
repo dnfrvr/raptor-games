@@ -1026,33 +1026,48 @@
 // pour qu'ils ne bougent pas quand l'écran se redessine).
 (function chips() {
   const B = 'calc(100% + var(--depth))';
-  const shape = (seed, small) => {
-    let h = 2166136261;
-    for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  const SEL = '.btn, .chip, .step';
+  const hash = (str) => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+  // Toutes les combinaisons de 3 éclats (au moins une encoche, au plus 2 coins) : les boutons voisins en
+  // prennent chacun une différente, pour qu'aucun ne ressemble à son voisin.
+  const KINDS = ['top', 'left', 'right', 'tl', 'tr', 'br', 'bl'];
+  const NOTCH = ['top', 'left', 'right'];
+  const COMBOS = [];
+  for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) for (let c = b + 1; c < 7; c++) {
+    const set = [KINDS[a], KINDS[b], KINDS[c]];
+    const notches = set.filter((k) => NOTCH.includes(k)).length;
+    if (notches >= 1 && notches <= 2) COMBOS.push(set);
+  }
+  const shape = (seed, combo, small) => {
+    let h = hash(seed);
     const r = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
     const n = (a, b) => Math.round(a + r() * (b - a));
-    const kinds = ['top', 'top', 'left', 'right', 'tl', 'tr', 'br', 'bl'];
-    const pick = new Set();
-    while (pick.size < 3) pick.add(kinds[n(0, kinds.length - 1)]);
-    const notch = () => (small ? { at: n(15, 65), d: n(3, 5), w: n(7, 11) } : { at: n(12, 72), d: n(4, 8), w: n(10, 16) });
+    const pick = new Set(combo);
+    const notch = () => (small ? { at: n(12, 68), d: n(3, 5), w: n(7, 11) } : { at: n(8, 78), d: n(4, 8), w: n(10, 16) });
     const corner = () => (small ? n(2, 4) : n(3, 6));
     const p = [];
     if (pick.has('tl')) { const c = corner(); p.push(`0 ${c}px`, `${c}px 0`); } else p.push('0 0');
     if (pick.has('top')) { const k = notch(); p.push(`${k.at}% 0`, `calc(${k.at}% + ${k.w / 2}px) ${k.d}px`, `calc(${k.at}% + ${k.w}px) 0`); }
     if (pick.has('tr')) { const c = corner(); p.push(`calc(100% - ${c}px) 0`, `100% ${c}px`); } else p.push('100% 0');
-    if (pick.has('right')) { const k = notch(); const y = Math.min(k.at, 50); p.push(`100% ${y}%`, `calc(100% - ${k.d}px) calc(${y}% + ${k.w / 2}px)`, `100% calc(${y}% + ${k.w}px)`); }
+    if (pick.has('right')) { const k = notch(); const y = Math.round(k.at * 0.6); p.push(`100% ${y}%`, `calc(100% - ${k.d}px) calc(${y}% + ${k.w / 2}px)`, `100% calc(${y}% + ${k.w}px)`); }
     if (pick.has('br')) { const c = corner(); p.push(`100% calc(${B} - ${c}px)`, `calc(100% - ${c}px) ${B}`); } else p.push(`100% ${B}`);
     if (pick.has('bl')) { const c = corner(); p.push(`${c}px ${B}`, `0 calc(${B} - ${c}px)`); } else p.push(`0 ${B}`);
-    if (pick.has('left')) { const k = notch(); const y = Math.min(k.at, 50); p.push(`0 calc(${y}% + ${k.w}px)`, `${k.d}px calc(${y}% + ${k.w / 2}px)`, `0 ${y}%`); }
+    if (pick.has('left')) { const k = notch(); const y = Math.round(k.at * 0.6); p.push(`0 calc(${y}% + ${k.w}px)`, `${k.d}px calc(${y}% + ${k.w / 2}px)`, `0 ${y}%`); }
     return `polygon(${p.join(', ')})`;
   };
-  const apply = (root) => {
-    for (const b of root.querySelectorAll('.btn:not([data-chip]), .chip:not([data-chip]), .step:not([data-chip])')) {
+  const label = (b) => b.id || b.className.split(' ')[0] + '|' + (b.dataset.v ?? b.textContent.trim());
+  const apply = () => {
+    for (const b of document.querySelectorAll('.btn:not([data-chip]), .chip:not([data-chip]), .step:not([data-chip])')) {
+      // Rang du bouton parmi ses voisins (même conteneur) : combinaisons consécutives = toutes différentes.
+      const parent = b.parentElement;
+      const sibs = parent ? [...parent.children].filter((x) => x.matches(SEL)) : [b];
+      const idx = Math.max(0, sibs.indexOf(b));
+      const base = hash((parent && (parent.id || parent.className)) + '|' + sibs.length);
+      const combo = COMBOS[(base + idx * 11) % COMBOS.length];
       b.dataset.chip = '1';
-      const small = !b.classList.contains('btn');
-      b.style.setProperty('--chip', shape(b.id || b.className.split(' ')[0] + '|' + (b.dataset.v ?? b.textContent.trim()), small));
+      b.style.setProperty('--chip', shape(label(b) + '#' + idx, combo, !b.classList.contains('btn')));
     }
   };
-  apply(document);
-  new MutationObserver(() => apply(document)).observe(document.body, { childList: true, subtree: true });
+  apply();
+  new MutationObserver(apply).observe(document.body, { childList: true, subtree: true });
 })();
