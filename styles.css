@@ -71,12 +71,10 @@ input::placeholder { color: var(--dim); }
   box-shadow: 0 var(--d) 0 var(--edge), inset 0 3px 0 #ffffff70, inset 3px 0 0 #ffffff30, inset 0 -3px 0 #00000026;
   /* Rectangle vu de face, avec quelques éclats sur les bords ; le polygone descend sous la boîte pour garder la tranche. */
   clip-path: polygon(
-    0 3px, 3px 0, 23% 0, calc(23% + 4px) 3px, calc(23% + 10px) 0, 100% 0,
-    100% 32%, calc(100% - 3px) calc(32% + 4px), 100% calc(32% + 10px),
+    0 0, 23% 0, calc(23% + 6px) 6px, calc(23% + 14px) 0, 100% 0,
+    100% 34%, calc(100% - 6px) calc(34% + 7px), 100% calc(34% + 15px),
     100% calc(100% + var(--depth) - 4px), calc(100% - 4px) calc(100% + var(--depth)),
-    calc(68% + 10px) calc(100% + var(--depth)), calc(68% + 5px) calc(100% + var(--depth) - 3px), 68% calc(100% + var(--depth)),
-    0 calc(100% + var(--depth)),
-    0 calc(58% + 9px), 3px calc(58% + 4px), 0 58%);
+    0 calc(100% + var(--depth)));
   transition: transform .07s, box-shadow .07s, opacity .2s, background-color .15s;
 }
 .btn:active { --d: 1px; transform: translateY(7px); }
