@@ -196,6 +196,13 @@
       return renderLobby();
     }
     show('game');
+    // Code du salon toujours affiché (discret) en bas : un joueur déconnecté peut revenir avec.
+    $('#gameCode').hidden = !!S.solo;
+    $('#gameCodeVal').textContent = S.code;
+    $('#gameCode').onclick = () => {
+      if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
+      else toast(S.code);
+    };
     renderGame();
   }
 
@@ -437,7 +444,8 @@
       // Adversaire parti et plus personne d'autre en ligne : on peut quitter au lieu d'attendre indéfiniment.
       const alone = !S.players.some((x, i) => i !== S.me && !x.bot && x.online);
       const leavable = p && !p.online && alone;
-      if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`;
+      if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`
+        + (S.solo ? '' : `<span class="rejoin">Pour revenir : code <b>${esc(S.code)}</b> sur l’accueil.</span>`);
       if (outSet.has(S.me)) txt = `<b>Tu es éliminé de cette manche.</b> ` + txt;
       $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '')
         + (leavable ? `<button type="button" class="btn ghost small-btn" id="quitGameBtn">Quitter la partie</button>` : '');

@@ -134,6 +134,10 @@ input::placeholder { color: var(--dim); }
 .codebox:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--yellow-edge); }
 .codebox-label { font-size: 13px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; }
 .codebox-code { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 13vw, 54px); line-height: 1.05; letter-spacing: .22em; color: var(--yellow); text-shadow: 0 3px 0 #00000080; }
+.gamecode { display: block; margin: 28px auto 0; padding: 8px 12px; background: none; border: 0; font-size: 13px; color: var(--dim); }
+.gamecode b { margin-left: 6px; font-family: var(--display); font-weight: 400; font-size: 17px; letter-spacing: .16em; color: var(--mute); }
+.watch .rejoin { display: block; margin-top: 6px; font-size: 14px; color: var(--mute); }
+.watch .rejoin b { font-family: var(--display); font-weight: 400; letter-spacing: .14em; color: var(--yellow); }
 .codebox-hint { font-size: 12px; color: var(--dim); }
 .invite.done .codebox { padding: 8px 14px 10px; }
 .invite.done .codebox-code { font-size: 32px; }
