@@ -69,8 +69,14 @@ input::placeholder { color: var(--dim); }
   text-shadow: 0 2px 0 #00000022;
   /* Tranche pleine en dessous, arête claire en haut, ombre de biseau en bas de la face */
   box-shadow: 0 var(--d) 0 var(--edge), inset 0 3px 0 #ffffff70, inset 3px 0 0 #ffffff30, inset 0 -3px 0 #00000026;
-  /* Bloc taillé : coins écornés, encoche sur le flanc gauche ; le polygone descend sous la boîte pour garder la tranche. */
-  clip-path: polygon(0 6px, 7px 0, calc(100% - 11px) 0, 100% 5px, 100% calc(100% + var(--depth) - 5px), calc(100% - 6px) calc(100% + var(--depth)), 9px calc(100% + var(--depth)), 0 calc(100% + var(--depth) - 8px), 0 64%, 4px calc(64% - 4px), 4px 40%, 0 calc(40% - 4px));
+  /* Rectangle vu de face, avec quelques éclats sur les bords ; le polygone descend sous la boîte pour garder la tranche. */
+  clip-path: polygon(
+    0 3px, 3px 0, 23% 0, calc(23% + 4px) 3px, calc(23% + 10px) 0, 100% 0,
+    100% 32%, calc(100% - 3px) calc(32% + 4px), 100% calc(32% + 10px),
+    100% calc(100% + var(--depth) - 4px), calc(100% - 4px) calc(100% + var(--depth)),
+    calc(68% + 10px) calc(100% + var(--depth)), calc(68% + 5px) calc(100% + var(--depth) - 3px), 68% calc(100% + var(--depth)),
+    0 calc(100% + var(--depth)),
+    0 calc(58% + 9px), 3px calc(58% + 4px), 0 58%);
   transition: transform .07s, box-shadow .07s, opacity .2s, background-color .15s;
 }
 .btn:active { --d: 1px; transform: translateY(7px); }
