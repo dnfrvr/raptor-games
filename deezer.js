@@ -356,12 +356,32 @@ async function guestTracks(a) {
  * D'abord les 100 sons les plus écoutés ; s'ils ne donnent plus personne, fouille profonde.
  * Renvoie [{ artist: { id, name, picture }, track }] (les plus connus d'abord).
  */
-async function findCollaboratorsDeep(a, isUsed = () => false) {
+// Partenaires lus seulement dans un titre (« feat. Emilie Sandre ») : Deezer ne les crédite pas sur le son, on n'a
+// donc que leur nom. On retrouve leur fiche Deezer (un appel par nom) pour les premiers, quand on en a besoin.
+async function withIds(list, max = 5, isUsed = () => false) {
+  const missing = list.filter((o) => !o.artist.id).slice(0, max);
+  await Promise.all(missing.map(async (o) => {
+    try {
+      const hit = (await searchArtists(o.artist.name, 3)).find((x) => norm(x.name) === norm(o.artist.name));
+      if (hit && !isUsed(hit)) o.artist = hit;
+    } catch (_) { /* ignore */ }
+  }));
+  return list;
+}
+
+// needId : le joker doit jouer un vrai artiste Deezer (photo, fiche, suite de la chaîne). Les noms lus dans un titre
+// sont alors complétés avec leur fiche, et si aucun n'en a, on continue la fouille au lieu de s'arrêter là.
+async function findCollaboratorsDeep(a, isUsed = () => false, { needId = false } = {}) {
   const top = (await findCollaborators(a, 100)).filter((o) => !isUsed(o.artist));
   // Partenaires déjà appris (préparation, autres parties, recherches précédentes) qui ne sont pas dans le top.
   const seenTop = new Set(top.map((o) => norm(o.artist.name)));
   const memo = knownPartners(a, isUsed).filter((o) => !seenTop.has(norm(o.artist.name)));
-  if (top.length || memo.length) return [...top, ...memo];
+  const quick = [...top, ...memo];
+  if (quick.length && !needId) return quick;
+  if (quick.length) {
+    await withIds(quick, 5, isUsed);
+    if (quick.some((o) => o.artist.id)) return quick;
+  }
 
   const [own, guest] = await Promise.all([albumTracks(a), guestTracks(a)]);
   const tracks = dedupe([...own, ...guest]);
@@ -402,14 +422,9 @@ async function findCollaboratorsDeep(a, isUsed = () => false) {
   }
   // Les noms lus seulement dans un titre n'ont pas d'identifiant Deezer : on le retrouve pour les premiers.
   const list = [...found.values()];
-  await Promise.all(list.slice(0, 5).map(async (o) => {
-    if (o.artist.id) return;
-    try {
-      const hit = (await searchArtists(o.artist.name, 3)).find((x) => norm(x.name) === norm(o.artist.name));
-      if (hit) o.artist = hit;
-    } catch (_) { /* ignore */ }
-  }));
-  return list;
+  await withIds(list, needId ? 8 : 5, isUsed);
+  // Joker : rien trouvé de plus en fouillant, on garde au moins les partenaires du top (complétés plus haut).
+  return list.length || !quick.length ? list : quick;
 }
 
 // Tous les artistes d'un son : liste officielle Deezer (détail du son) + noms écrits dans la partie feat du titre.
@@ -514,4 +529,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

@@ -442,7 +442,9 @@ class Room {
     let options = [];
     try {
       // Les sons les plus écoutés d'abord, puis la fouille profonde s'ils ne suffisent pas. On garde les artistes identifiés.
-      options = (await deezer.findCollaboratorsDeep(this.current(), (x) => this.usedArtist(x))).filter((o) => o.artist.id);
+      // needId : les partenaires lus seulement dans un titre (« feat. X ») sont complétés avec leur fiche Deezer.
+      options = (await deezer.findCollaboratorsDeep(this.current(), (x) => this.usedArtist(x), { needId: true }))
+        .filter((o) => o.artist.id && !this.usedArtist(o.artist));
     } catch (e) { console.error('joker', e.message); }
     if (this.round !== r || this.phase !== 'playing' || r.turn !== i) return;
     r.checking = false;
