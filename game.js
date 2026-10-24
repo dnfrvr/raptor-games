@@ -74,6 +74,19 @@ class Room {
 
   idx(token) { return this.players.findIndex((p) => p.token === token); }
 
+  // Quitter le salon avant le lancement : la place se libère ; si l'hôte part, le suivant devient hôte.
+  // Renvoie true si le salon est désormais vide (le serveur le supprime).
+  leave(token) {
+    const i = this.idx(token);
+    if (i < 0 || this.phase !== 'lobby') return false;
+    this.players.splice(i, 1);
+    const humans = this.players.filter((p) => !p.bot);
+    if (!humans.length) return true;
+    if (token === this.hostToken) this.hostToken = humans[0].token;
+    this.broadcast();
+    return false;
+  }
+
   setSettings(token, s) {
     if (token !== this.hostToken || this.phase !== 'lobby') return;
     if (TURN_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);

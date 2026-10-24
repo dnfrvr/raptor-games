@@ -163,10 +163,13 @@
     if (!S) store.set('rg_room', '');
   });
 
-  document.querySelectorAll('[data-leave]').forEach((b) => b.addEventListener('click', () => {
+  // Quitter : dans le salon (avant le lancement), on libère vraiment sa place côté serveur.
+  const leaveRoom = () => {
+    if (S && S.phase === 'lobby') socket.emit('leave');
     store.set('rg_room', '');
-    location.href = '/';
-  }));
+    setTimeout(() => { location.href = '/'; }, 120);
+  };
+  document.querySelectorAll('[data-leave]').forEach((b) => b.addEventListener('click', leaveRoom));
 
   // ================= ÉTAT =================
   socket.on('state', (st) => {
@@ -207,6 +210,12 @@
     const ready = N >= 2;
     const url = `${location.origin}/r/${S.code}`;
     $('#lobbyCode').textContent = S.code;
+    $('#bigCode').textContent = S.code;
+    $('#lobby .roomtag').hidden = !S.solo; // le gros code le remplace en multi
+    $('#codeBox').onclick = () => {
+      if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
+      else toast(S.code);
+    };
     $('#inviteUrl').textContent = url.replace(/^https?:\/\//, '');
 
     // Une fois l'adversaire arrivé, l'invitation passe au second plan.
@@ -425,10 +434,15 @@
         : `Deezer ne trouve pas de son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}.${triesTxt} Si ce feat existe, tu peux le valider.`;
       const grantable = !r.checking && !r.appeal && r.lastError && ['notfound', 'api', 'refused'].includes(r.lastError.why);
       const p = S.players[r.turn];
+      // Adversaire parti et plus personne d'autre en ligne : on peut quitter au lieu d'attendre indéfiniment.
+      const alone = !S.players.some((x, i) => i !== S.me && !x.bot && x.online);
+      const leavable = p && !p.online && alone;
       if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`;
       if (outSet.has(S.me)) txt = `<b>Tu es éliminé de cette manche.</b> ` + txt;
-      $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '');
+      $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '')
+        + (leavable ? `<button type="button" class="btn ghost small-btn" id="quitGameBtn">Quitter la partie</button>` : '');
       if (grantable) armTwoTap($('#grantBtn'), 'Valider ce feat', 'Sûr ?', () => socket.emit('grant'));
+      if (leavable) $('#quitGameBtn').onclick = leaveRoom;
     }
 
     // --- Arbitrage ---

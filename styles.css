@@ -125,6 +125,19 @@ input::placeholder { color: var(--dim); }
 .invite { margin: 26px 0 8px; }
 .lobby-title { font-family: var(--display); font-weight: 400; text-transform: uppercase; font-size: clamp(38px, 11vw, 56px); line-height: 1; margin: 0 0 10px; }
 .invite .small { word-break: break-all; margin-bottom: 16px; }
+/* Code du salon bien visible : à lire à voix haute ou à taper sur l'accueil */
+.codebox {
+  display: grid; justify-items: start; gap: 2px; width: 100%; margin: 6px 0 12px; padding: 12px 16px 14px; text-align: left;
+  background-color: var(--deep); background-image: var(--sheen-soft); border: 3px solid var(--yellow); border-radius: 0; color: var(--paper); cursor: pointer;
+  box-shadow: 0 5px 0 var(--yellow-edge);
+}
+.codebox:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--yellow-edge); }
+.codebox-label { font-size: 13px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; }
+.codebox-code { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 13vw, 54px); line-height: 1.05; letter-spacing: .22em; color: var(--yellow); text-shadow: 0 3px 0 #00000080; }
+.codebox-hint { font-size: 12px; color: var(--dim); }
+.invite.done .codebox { padding: 8px 14px 10px; }
+.invite.done .codebox-code { font-size: 32px; }
+.topline .link { margin-left: auto; }
 .invite-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
 .invite-row .btn.ghost { --edge: var(--deep); background-color: var(--night-3); color: var(--paper); }
 .invite.done { margin-bottom: 0; }
