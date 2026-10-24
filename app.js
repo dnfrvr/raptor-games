@@ -1022,11 +1022,11 @@
   render();
 })();
 
-// Boutons en blocs : trois éclats placés au hasard sur chaque bouton (toujours les mêmes pour un même bouton,
+// Boutons en blocs (gros boutons, puces de réglage, +/−) : trois éclats placés au hasard sur chaque bouton (toujours les mêmes pour un même bouton,
 // pour qu'ils ne bougent pas quand l'écran se redessine).
 (function chips() {
   const B = 'calc(100% + var(--depth))';
-  const shape = (seed) => {
+  const shape = (seed, small) => {
     let h = 2166136261;
     for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
     const r = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
@@ -1034,8 +1034,8 @@
     const kinds = ['top', 'top', 'left', 'right', 'tl', 'tr', 'br', 'bl'];
     const pick = new Set();
     while (pick.size < 3) pick.add(kinds[n(0, kinds.length - 1)]);
-    const notch = () => ({ at: n(12, 72), d: n(4, 8), w: n(10, 16) });
-    const corner = () => n(3, 6);
+    const notch = () => (small ? { at: n(15, 65), d: n(3, 5), w: n(7, 11) } : { at: n(12, 72), d: n(4, 8), w: n(10, 16) });
+    const corner = () => (small ? n(2, 4) : n(3, 6));
     const p = [];
     if (pick.has('tl')) { const c = corner(); p.push(`0 ${c}px`, `${c}px 0`); } else p.push('0 0');
     if (pick.has('top')) { const k = notch(); p.push(`${k.at}% 0`, `calc(${k.at}% + ${k.w / 2}px) ${k.d}px`, `calc(${k.at}% + ${k.w}px) 0`); }
@@ -1047,9 +1047,10 @@
     return `polygon(${p.join(', ')})`;
   };
   const apply = (root) => {
-    for (const b of root.querySelectorAll('.btn:not([data-chip])')) {
+    for (const b of root.querySelectorAll('.btn:not([data-chip]), .chip:not([data-chip]), .step:not([data-chip])')) {
       b.dataset.chip = '1';
-      b.style.setProperty('--chip', shape(b.id || b.className + '|' + b.textContent.trim()));
+      const small = !b.classList.contains('btn');
+      b.style.setProperty('--chip', shape(b.id || b.className.split(' ')[0] + '|' + (b.dataset.v ?? b.textContent.trim()), small));
     }
   };
   apply(document);
