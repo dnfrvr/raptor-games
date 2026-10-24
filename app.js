@@ -1021,3 +1021,37 @@
   if (ownRoom && store.get('rg_name')) socket.emit('join', { token, code: inviteCode, name: null });
   render();
 })();
+
+// Boutons en blocs : trois éclats placés au hasard sur chaque bouton (toujours les mêmes pour un même bouton,
+// pour qu'ils ne bougent pas quand l'écran se redessine).
+(function chips() {
+  const B = 'calc(100% + var(--depth))';
+  const shape = (seed) => {
+    let h = 2166136261;
+    for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    const r = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+    const n = (a, b) => Math.round(a + r() * (b - a));
+    const kinds = ['top', 'top', 'left', 'right', 'tl', 'tr', 'br', 'bl'];
+    const pick = new Set();
+    while (pick.size < 3) pick.add(kinds[n(0, kinds.length - 1)]);
+    const notch = () => ({ at: n(12, 72), d: n(4, 8), w: n(10, 16) });
+    const corner = () => n(3, 6);
+    const p = [];
+    if (pick.has('tl')) { const c = corner(); p.push(`0 ${c}px`, `${c}px 0`); } else p.push('0 0');
+    if (pick.has('top')) { const k = notch(); p.push(`${k.at}% 0`, `calc(${k.at}% + ${k.w / 2}px) ${k.d}px`, `calc(${k.at}% + ${k.w}px) 0`); }
+    if (pick.has('tr')) { const c = corner(); p.push(`calc(100% - ${c}px) 0`, `100% ${c}px`); } else p.push('100% 0');
+    if (pick.has('right')) { const k = notch(); const y = Math.min(k.at, 50); p.push(`100% ${y}%`, `calc(100% - ${k.d}px) calc(${y}% + ${k.w / 2}px)`, `100% calc(${y}% + ${k.w}px)`); }
+    if (pick.has('br')) { const c = corner(); p.push(`100% calc(${B} - ${c}px)`, `calc(100% - ${c}px) ${B}`); } else p.push(`100% ${B}`);
+    if (pick.has('bl')) { const c = corner(); p.push(`${c}px ${B}`, `0 calc(${B} - ${c}px)`); } else p.push(`0 ${B}`);
+    if (pick.has('left')) { const k = notch(); const y = Math.min(k.at, 50); p.push(`0 calc(${y}% + ${k.w}px)`, `${k.d}px calc(${y}% + ${k.w / 2}px)`, `0 ${y}%`); }
+    return `polygon(${p.join(', ')})`;
+  };
+  const apply = (root) => {
+    for (const b of root.querySelectorAll('.btn:not([data-chip])')) {
+      b.dataset.chip = '1';
+      b.style.setProperty('--chip', shape(b.id || b.className + '|' + b.textContent.trim()));
+    }
+  };
+  apply(document);
+  new MutationObserver(() => apply(document)).observe(document.body, { childList: true, subtree: true });
+})();

@@ -69,12 +69,9 @@ input::placeholder { color: var(--dim); }
   text-shadow: 0 2px 0 #00000022;
   /* Tranche pleine en dessous, arête claire en haut, ombre de biseau en bas de la face */
   box-shadow: 0 var(--d) 0 var(--edge), inset 0 3px 0 #ffffff70, inset 3px 0 0 #ffffff30, inset 0 -3px 0 #00000026;
-  /* Rectangle vu de face, avec quelques éclats sur les bords ; le polygone descend sous la boîte pour garder la tranche. */
-  clip-path: polygon(
-    0 0, 23% 0, calc(23% + 6px) 6px, calc(23% + 14px) 0, 100% 0,
-    100% 34%, calc(100% - 6px) calc(34% + 7px), 100% calc(34% + 15px),
-    100% calc(100% + var(--depth) - 4px), calc(100% - 4px) calc(100% + var(--depth)),
-    0 calc(100% + var(--depth)));
+  /* Rectangle vu de face ; le polygone descend sous la boîte pour garder la tranche. */
+  /* Forme par défaut ; app.js donne à chaque bouton ses propres éclats (--chip), placés au hasard. */
+  clip-path: var(--chip, polygon(0 0, 100% 0, 100% calc(100% + var(--depth)), 0 calc(100% + var(--depth))));
   transition: transform .07s, box-shadow .07s, opacity .2s, background-color .15s;
 }
 .btn:active { --d: 1px; transform: translateY(7px); }
