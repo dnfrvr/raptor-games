@@ -1028,13 +1028,13 @@
   const B = 'calc(100% + var(--depth))';
   const SEL = '.btn, .chip, .step';
   const hash = (str) => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
-  // Toutes les combinaisons de 3 éclats (au moins une encoche, au plus 2 coins) : les boutons voisins en
-  // prennent chacun une différente, pour qu'aucun ne ressemble à son voisin.
+  // Toutes les combinaisons de 2 ou 3 éclats (au moins une encoche) : les boutons voisins en prennent chacun
+  // une différente, pour qu'aucun ne ressemble à son voisin.
   const KINDS = ['top', 'left', 'right', 'tl', 'tr', 'br', 'bl'];
   const NOTCH = ['top', 'left', 'right'];
   const COMBOS = [];
-  for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) for (let c = b + 1; c < 7; c++) {
-    const set = [KINDS[a], KINDS[b], KINDS[c]];
+  for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) for (let c = b; c < 7; c++) {
+    const set = c === b ? [KINDS[a], KINDS[b]] : [KINDS[a], KINDS[b], KINDS[c]];
     const notches = set.filter((k) => NOTCH.includes(k)).length;
     if (notches >= 1 && notches <= 2) COMBOS.push(set);
   }
@@ -1043,8 +1043,8 @@
     const r = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
     const n = (a, b) => Math.round(a + r() * (b - a));
     const pick = new Set(combo);
-    const notch = () => (small ? { at: n(12, 68), d: n(3, 5), w: n(7, 11) } : { at: n(8, 78), d: n(4, 8), w: n(10, 16) });
-    const corner = () => (small ? n(2, 4) : n(3, 6));
+    const notch = () => (small ? { at: n(12, 68), d: n(2, 3), w: n(5, 7) } : { at: n(8, 78), d: n(3, 5), w: n(7, 10) });
+    const corner = () => (small ? n(2, 3) : n(2, 4));
     const p = [];
     if (pick.has('tl')) { const c = corner(); p.push(`0 ${c}px`, `${c}px 0`); } else p.push('0 0');
     if (pick.has('top')) { const k = notch(); p.push(`${k.at}% 0`, `calc(${k.at}% + ${k.w / 2}px) ${k.d}px`, `calc(${k.at}% + ${k.w}px) 0`); }
@@ -1063,7 +1063,7 @@
       const sibs = parent ? [...parent.children].filter((x) => x.matches(SEL)) : [b];
       const idx = Math.max(0, sibs.indexOf(b));
       const base = hash((parent && (parent.id || parent.className)) + '|' + sibs.length);
-      const combo = COMBOS[(base + idx * 11) % COMBOS.length];
+      const combo = COMBOS[(base + idx * 13) % COMBOS.length];
       b.dataset.chip = '1';
       b.style.setProperty('--chip', shape(label(b) + '#' + idx, combo, !b.classList.contains('btn')));
     }
