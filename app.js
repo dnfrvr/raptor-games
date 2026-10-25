@@ -664,6 +664,8 @@
       }
     }
 
+    renderRecap(fin && S.final ? S.final.recap : null);
+
     const btn = $('#endBtn');
     btn.hidden = false;
     if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => socket.emit('start'); }
@@ -680,6 +682,34 @@
       setTimeout(() => btn.focus({ preventScroll: true }), 60);
       if (r.winner === S.me || (fin && w === S.me)) sfx.win(); else sfx.out();
     }
+  }
+
+  // Récap de fin de partie
+  function renderRecap(rc) {
+    const el = $('#endRecap');
+    el.hidden = !rc;
+    if (!rc) return;
+    const key = JSON.stringify(rc);
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    const L = rc.longest;
+    const head = `<p class="recap-title">Le récap</p><ul class="recap-facts">`
+      + `<li><b>${rc.totalFeats}</b><span>${rc.totalFeats > 1 ? 'feats' : 'feat'} en ${plural(rc.rounds, 'manche')}</span></li>`
+      + (L && L.n > 0 ? `<li><b>${L.n}</b><span>plus longue chaîne${rc.rounds > 1 ? `, manche ${L.round}` : ''}${L.start ? `, partie de ${esc(L.start)}` : ''}</span></li>` : '')
+      + `</ul>`;
+    const cards = rc.players.map((st, i) => {
+      const p = S.players[i];
+      if (!p) return '';
+      const bits = [plural(st.feats, 'feat')];
+      if (st.rare) bits.push(`${st.rare} rare${st.rare > 1 ? 's' : ''}`);
+      if (st.titles) bits.push(`${st.titles} bon${st.titles > 1 ? 's' : ''} titre${st.titles > 1 ? 's' : ''}`);
+      if (st.jokers) bits.push(`${st.jokers} joker${st.jokers > 1 ? 's' : ''} joué${st.jokers > 1 ? 's' : ''}`);
+      if (st.relaunches) bits.push(`${st.relaunches} relance${st.relaunches > 1 ? 's' : ''}`);
+      if (st.kos) bits.push(`${st.kos} K.O. infligé${st.kos > 1 ? 's' : ''}`);
+      const best = st.best ? `<span class="recap-best">Meilleur coup : <b>${esc(st.best.artist)}</b>${st.best.title ? ` avec « ${esc(st.best.title)} »` : ''}${st.best.rare ? ' <span class="tag rare">Rare</span>' : ''}</span>` : '';
+      return `<li class="recap-p p${i}${i === S.me ? ' me' : ''}"><span class="recap-name">${esc(p.name)}</span><span class="recap-stats">${bits.join(' · ')}</span>${best}</li>`;
+    }).join('');
+    el.innerHTML = head + `<ul class="recap-players">${cards}</ul>`;
   }
 
   // ================= PISTES / AUDIO =================

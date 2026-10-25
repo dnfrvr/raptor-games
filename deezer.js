@@ -198,7 +198,10 @@ async function findFeat(a, b, songHint) {
     const tops = await Promise.allSettled([get(`/artist/${a.id}/top?limit=100`), get(`/artist/${b.id}/top?limit=100`)]);
     const ranks = tops.map((r) => new Map((r.status === 'fulfilled' ? r.value.data || [] : []).map((t, i) => [t.id, i])));
     const rare = ranks.every((m) => !m.has(memo.id) || m.get(memo.id) >= RARE_RANK);
-    return { ...memo, rare, hinted: !!hint };
+    const inTop = tops.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : [])).find((t) => t.id === memo.id);
+    const track = inTop ? { ...memo, preview: inTop.preview || memo.preview } : await freshTrack(memo);
+    const { at, ...clean } = track;
+    return { ...clean, rare, hinted: !!hint };
   }
 
   // 1) En parallèle : les tops des deux artistes (avec la liste des artistes de chaque son) et la recherche « A B »,
@@ -445,7 +448,10 @@ async function trackArtists(track) {
 // ---------- Mémoire des feats (partagée entre toutes les parties) ----------
 // Chaque son vu passer (tops, recherches, détails) est « appris » : pour chaque paire d'artistes du son, on retient
 // le feat dans les deux sens. Une vérification déjà connue ne coûte alors plus aucun appel.
-const MEMO_TTL = TTL;
+// Un feat ne disparaît pas : la mémoire garde les paires 30 jours (et survit aux redémarrages, voir persist.js).
+// Seuls les extraits audio expirent côté Deezer : freshTrack() les renouvelle au moment de s'en servir.
+const MEMO_TTL = 30 * 24 * 3600 * 1000;
+let memoDirty = 0; // nouveautés depuis la dernière sauvegarde
 const NO_FEAT_TTL = 30 * 60 * 1000; // une mauvaise réponse est retenue 30 min
 const featMemo = new Map();          // "a|b" (noms normalisés, triés) → { track, exp }
 const partnerIdx = new Map();        // nom normalisé → Map(nom partenaire → { artist, track, exp })
@@ -466,14 +472,14 @@ function learnTrack(t) {
   if (!t || !t.id || !t.title) return;
   const ppl = peopleOf(t);
   if (ppl.length < 2) return;
-  const out = trackOut(t);
+  const out = { ...trackOut(t), at: Date.now() };
   const exp = Date.now() + MEMO_TTL;
   for (let i = 0; i < ppl.length; i++) {
     for (let j = i + 1; j < ppl.length; j++) {
       const x = ppl[i], y = ppl[j];
       if (!x.official && !y.official) continue; // comme proves() : au moins un des deux doit être crédité sur le son
       const k = pairKey(x.name, y.name);
-      if (!featMemo.has(k)) featMemo.set(k, { track: out, exp });
+      if (!featMemo.has(k)) { featMemo.set(k, { track: out, exp }); memoDirty++; }
       link(x, y, out, exp); link(y, x, out, exp);
     }
   }
@@ -503,6 +509,62 @@ function knownPartners(a, isUsed = () => false) {
   return [...m.values()].filter((o) => o.exp > now && !isUsed(o.artist)).map(({ artist, track }) => ({ artist, track }));
 }
 
+// Extrait audio à jour : les liens d'extraits Deezer expirent ; un son sorti de la mémoire (appris il y a plus d'une
+// heure, ou rechargé après un redémarrage) est relu chez Deezer (un appel, souvent déjà en cache).
+async function freshTrack(track) {
+  if (!track || !track.id) return track;
+  if (track.preview && track.at && Date.now() - track.at < 3600 * 1000) return track;
+  try {
+    const t = await get(`/track/${track.id}`);
+    if (t && t.id) return { ...track, preview: t.preview || null, cover: (t.album && (t.album.cover_medium || t.album.cover)) || track.cover, at: Date.now() };
+  } catch (_) { /* on garde le son sans extrait */ }
+  return track;
+}
+
+// ---------- Sauvegarde de la mémoire (voir persist.js) ----------
+// Format compact : sons dédoublonnés (sans extrait audio, qui expire), paires et partenaires pointant vers ces sons.
+function exportMemory({ maxPairs = 40000, maxNames = 8000, maxPartners = 60 } = {}) {
+  const now = Date.now();
+  const tracks = [], tIdx = new Map();
+  const ti = (o) => {
+    if (!tIdx.has(o.id)) { tIdx.set(o.id, tracks.length); tracks.push([o.id, o.title, o.fullTitle, o.cover, o.album, o.artists]); }
+    return tIdx.get(o.id);
+  };
+  const pairs = [];
+  for (const [k, m] of [...featMemo].slice(-maxPairs)) if (m.exp > now) pairs.push([k, ti(m.track), m.exp]);
+  const names = [];
+  for (const [k, m] of [...partnerIdx].slice(-maxNames)) {
+    const list = [];
+    for (const [pk, o] of [...m].slice(0, maxPartners)) {
+      if (o.exp <= now) continue;
+      const a = o.artist.id ? [o.artist.id, o.artist.name, o.artist.picture, o.artist.fans || 0] : [null, o.artist.name];
+      list.push([pk, a, ti(o.track), o.exp]);
+    }
+    if (list.length) names.push([k, list]);
+  }
+  memoDirty = 0;
+  return { v: 1, tracks, pairs, names };
+}
+function importMemory(data) {
+  if (!data || data.v !== 1) return 0;
+  const now = Date.now();
+  const tr = (data.tracks || []).map(([id, title, fullTitle, cover, album, artists]) => (
+    { id, title, fullTitle, preview: null, link: `https://www.deezer.com/track/${id}`, cover, album, artists: artists || [], at: 0 }));
+  let n = 0;
+  for (const [k, i, exp] of data.pairs || []) if (exp > now && tr[i] && !featMemo.has(k)) { featMemo.set(k, { track: tr[i], exp }); n++; }
+  for (const [k, list] of data.names || []) {
+    let m = partnerIdx.get(k);
+    if (!m) { m = new Map(); partnerIdx.set(k, m); }
+    for (const [pk, a, i, exp] of list) {
+      if (exp <= now || !tr[i] || m.has(pk) || m.size >= 400) continue;
+      const artist = a[0] ? { id: a[0], name: a[1], picture: a[2] || null, fans: a[3] || 0 } : { id: null, name: a[1], picture: null };
+      m.set(pk, { artist, track: tr[i], exp });
+    }
+  }
+  return n;
+}
+const memoryStats = () => ({ pairs: featMemo.size, artists: partnerIdx.size, unsaved: memoDirty });
+
 // ---------- Préparation pendant que le joueur réfléchit ----------
 // Dès qu'un artiste est en jeu, on charge ses partenaires en tâche de fond (basse priorité) : top, apparitions
 // chez d'autres, et si besoin la liste des artistes des sons de ses sorties. La réponse du joueur, le contrôle du K.O.
@@ -529,4 +591,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

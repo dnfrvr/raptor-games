@@ -60,6 +60,33 @@ class Room {
     }
     this.botTimer = null;
     this.botKey = '';
+    this.nextRandom = null;
+    this.preloadRandom(); // dès le salon : le prochain rappeur « au hasard » est déjà tiré et préparé
+  }
+
+  // Tire à l'avance le prochain rappeur « au hasard » (départ de manche ou relance après K.O.) et prépare ses feats
+  // en tâche de fond : le bouton « Au hasard » répond alors tout de suite, et le premier coup est déjà en mémoire.
+  async preloadRandom() {
+    if (this.loadingRandom) return;
+    this.loadingRandom = true;
+    try {
+      const starts = new Set(this.history.map((h) => h.start && deezer.norm(h.start.name)));
+      const pool = [...new Set(FR_RAPPERS)].filter((n) => !starts.has(deezer.norm(n)));
+      for (let tries = 0; tries < 5; tries++) {
+        const name = pool[Math.floor(Math.random() * pool.length)] || 'Ninho';
+        const res = await deezer.searchArtists(name, 5).catch(() => []);
+        const a = res.find((x) => deezer.norm(x.name) === deezer.norm(name)) || res[0];
+        if (a && !(this.round && this.usedArtist(a))) { this.nextRandom = a; deezer.prepare(a); break; }
+      }
+    } finally {
+      this.loadingRandom = false;
+    }
+  }
+  takeRandom(okFn) {
+    const a = this.nextRandom;
+    this.nextRandom = null;
+    setTimeout(() => this.preloadRandom(), 0);
+    return a && okFn(a) ? a : null;
   }
 
   addPlayer(token, name) {
@@ -113,9 +140,33 @@ class Room {
     if (this.phase !== 'roundEnd' || this.idx(token) < 0) return;
     const best = Math.max(...this.players.map((p) => p.score));
     const top = this.players.map((p, i) => (p.score === best ? i : -1)).filter((i) => i >= 0);
-    this.final = { stopped: true, winner: top.length === 1 ? top[0] : null, by: this.idx(token) };
+    this.final = { stopped: true, winner: top.length === 1 ? top[0] : null, by: this.idx(token), recap: this.recap() };
     this.phase = 'finished';
     this.broadcast();
+  }
+
+  // Récap de fin de partie : plus longue chaîne, et pour chaque joueur ses feats, ses rares, ses jokers et son meilleur coup.
+  recap() {
+    const H = this.history;
+    if (!H.length) return null;
+    let longest = null;
+    H.forEach((h, k) => { if (!longest || h.links > longest.n) longest = { n: h.links, round: k + 1, start: h.start ? h.start.name : null }; });
+    const players = this.players.map((p, i) => {
+      const mine = H.flatMap((h) => h.feats.filter((f) => f.by === i));
+      const found = mine.filter((f) => !f.joker && !f.relaunch);
+      const score = (f) => (f.rare ? 2 : 0) + (f.hinted ? 1 : 0) - (f.appeal ? 3 : 0);
+      const best = found.filter((f) => !f.appeal).sort((a, b) => score(b) - score(a))[0] || null;
+      return {
+        feats: found.length,
+        rare: found.filter((f) => f.rare).length,
+        titles: found.filter((f) => f.hinted).length,
+        jokers: mine.filter((f) => f.joker).length,
+        relaunches: mine.filter((f) => f.relaunch).length,
+        kos: H.filter((h) => h.reason === 'ko' && h.lastBy === i).length,
+        best: best && (best.rare || best.hinted) ? { artist: best.artist, title: best.title, rare: best.rare, hinted: best.hinted } : null,
+      };
+    });
+    return { rounds: H.length, totalFeats: H.reduce((s, h) => s + h.links, 0), longest, players };
   }
 
   async next(token) {
@@ -257,7 +308,7 @@ class Room {
     r.checking = { artist: { name: 'au hasard' }, random: true, relaunch: true };
     this.broadcast();
     const pool = [...new Set(FR_RAPPERS)];
-    let found = null;
+    let found = this.takeRandom((a) => !this.usedArtist(a));
     for (let tries = 0; tries < 10 && !found; tries++) {
       const name = pool[Math.floor(Math.random() * pool.length)];
       try {
@@ -283,6 +334,9 @@ class Room {
   startClock() {
     clearTimeout(this.timer);
     if (!this.settings.turnSeconds) { this.round.deadline = null; return; }
+    // Joueur au tour déconnecté : le chrono attend son retour (voir syncPresence).
+    if (this.turnAway()) { this.round.deadline = null; this.round.awayPause = true; return; }
+    this.round.awayPause = false;
     this.round.deadline = Date.now() + this.round.remaining;
     this.timer = setTimeout(() => this.timeout(), this.round.remaining + 150);
   }
@@ -291,6 +345,29 @@ class Room {
     clearTimeout(this.timer);
     if (this.round.deadline) this.round.remaining = Math.max(0, this.round.deadline - Date.now());
     this.round.deadline = null;
+  }
+
+  turnAway() {
+    const r = this.round;
+    const p = this.phase === 'playing' && r && this.players[r.turn];
+    return !!(p && !p.bot && p.sockets.size === 0);
+  }
+
+  // Appelé à chaque connexion / déconnexion : chrono figé tant que le joueur au tour est parti,
+  // relancé à son retour avec au moins 10 s (le temps de se remettre dans la partie).
+  syncPresence() {
+    const r = this.round;
+    if (this.phase !== 'playing' || !r || !this.settings.turnSeconds) return;
+    const busy = r.checking || r.appeal || r.ko;
+    if (this.turnAway()) {
+      if (r.deadline && !busy) { this.pauseClock(); r.awayPause = true; }
+    } else if (r.awayPause) {
+      r.awayPause = false;
+      if (!busy && !r.deadline) {
+        r.remaining = Math.max(r.remaining || 0, Math.min(AFTER_MISS_MS, this.settings.turnSeconds * 1000));
+        this.startClock();
+      }
+    }
   }
 
   resetClock() {
@@ -317,9 +394,17 @@ class Room {
     this.round.reason = reason;
     this.round.deadline = null;
     this.players[winner].score++;
-    this.history.push({ start: this.round.start, links: this.round.chain.length - 1, winner });
+    const r = this.round;
+    this.history.push({
+      start: r.start, links: r.chain.length - 1, winner, reason,
+      lastBy: r.chain.length ? r.chain[r.chain.length - 1].by : null,
+      feats: r.chain.slice(1).map((l) => ({
+        by: l.by, artist: l.artist.name, title: l.track ? l.track.title : null,
+        rare: !!l.rare, joker: !!l.joker, appeal: !!l.byAppeal, relaunch: !!l.relaunch, hinted: !!(l.track && l.track.hinted && !l.joker),
+      })),
+    });
     const done = this.settings.target > 0 && this.players[winner].score >= this.settings.target;
-    if (done) this.final = { stopped: false, winner };
+    if (done) this.final = { stopped: false, winner, recap: this.recap() };
     this.phase = done ? 'finished' : 'roundEnd';
     this.broadcast();
     this.loadExamples();
@@ -333,8 +418,9 @@ class Room {
     if (!a || !a.id) return;
     try {
       const list = await deezer.findCollaboratorsDeep(a, (x) => this.usedArtist(x));
+      const top3 = await Promise.all(list.slice(0, 3).map(async (o) => ({ ...o, track: await deezer.freshTrack(o.track) })));
       if (this.round !== r) return;
-      r.examples = list.slice(0, 3).map((o) => ({
+      r.examples = top3.map((o) => ({
         artist: { id: o.artist.id, name: o.artist.name },
         track: { title: o.track.title, preview: o.track.preview, link: o.track.link },
       }));
@@ -365,7 +451,7 @@ class Room {
     this.broadcast();
     const used = new Set(this.history.map((h) => h.start && deezer.norm(h.start.name)));
     const pool = [...new Set(FR_RAPPERS)].filter((n) => !used.has(deezer.norm(n)));
-    let found = null;
+    let found = this.takeRandom((a) => !used.has(deezer.norm(a.name)));
     for (let tries = 0; tries < 8 && !found; tries++) {
       const name = pool[Math.floor(Math.random() * pool.length)] || 'Ninho';
       try {
@@ -447,16 +533,19 @@ class Room {
         .filter((o) => o.artist.id && !this.usedArtist(o.artist));
     } catch (e) { console.error('joker', e.message); }
     if (this.round !== r || this.phase !== 'playing' || r.turn !== i) return;
-    r.checking = false;
     if (!options.length) {
+      r.checking = false;
       r.lastError = { artist: { name: 'Joker' }, why: 'joker' };
       this.startClock();
       return this.broadcast();
     }
-    p.jokers--;
     // Parmi les 5 feats les plus connus, pour que le joker reste crédible.
     const pick = options[Math.floor(Math.random() * Math.min(5, options.length))];
-    this.accept(pick.artist, { ...pick.track, joker: true, rare: false, hinted: false }, false);
+    const track = await deezer.freshTrack(pick.track); // extrait audio à jour si le son vient de la mémoire
+    if (this.round !== r || this.phase !== 'playing' || r.turn !== i) return;
+    r.checking = false;
+    p.jokers--;
+    this.accept(pick.artist, { ...track, joker: true, rare: false, hinted: false }, false);
   }
 
   // Réactions emoji : relayées à tous, une toutes les 2 s par joueur.

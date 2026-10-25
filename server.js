@@ -8,6 +8,9 @@ const deezer = require('./deezer');
 const { Room } = require('./game');
 
 if (process.env.DEEZER_MOCK) require('./mock-deezer').install(deezer);
+// Mémoire des feats sauvegardée sur Upstash (si configuré sur Render) : rechargée au démarrage.
+const persist = require('./persist');
+if (!process.env.DEEZER_MOCK) persist.start(deezer);
 
 const app = express();
 const server = http.createServer(app);
@@ -28,7 +31,7 @@ const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
   .replace('<head>', `<head>\n  <meta name="app-version" content="${VERSION}" data-updated="${UPDATED.toISOString()}">`);
 const sendIndex = (_, res) => { res.set('Cache-Control', 'no-cache, no-store, must-revalidate'); res.type('html').send(INDEX); };
 app.get('/', sendIndex);
-app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION }); });
+app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer) }); });
 // Service worker : garde le jeu sur le téléphone pour l'ouvrir même quand le serveur dort.
 const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VERSION__/g, VERSION);
 app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
@@ -83,6 +86,7 @@ io.on('connection', (socket) => {
     if (!p) return fail(r.phase !== 'lobby' ? 'La partie a déjà commencé.' : 'Le salon est déjà complet.');
     room = r;
     p.sockets.add(socket.id);
+    r.syncPresence();
     r.broadcast();
   });
 
@@ -112,6 +116,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (!room) return;
     for (const p of room.players) p.sockets.delete(socket.id);
+    room.syncPresence();
     room.broadcast();
   });
 });
