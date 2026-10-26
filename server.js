@@ -17,6 +17,12 @@ const persist = require('./persist');
 if (!process.env.DEEZER_MOCK) persist.start(deezer);
 
 const app = express();
+// Ancienne adresse : si REDIRECT_TO est défini (ex. https://raptor-games.onrender.com), tout est renvoyé vers la nouvelle,
+// en gardant le chemin (un lien d'invitation /r/CODE reste valable).
+if (process.env.REDIRECT_TO) {
+  const to = process.env.REDIRECT_TO.replace(/\/+$/, '');
+  app.use((req, res, next) => (req.path === '/health' ? next() : res.redirect(301, to + req.originalUrl)));
+}
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: false } });
 const rooms = new Map();
