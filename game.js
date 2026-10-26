@@ -132,6 +132,7 @@ class Room {
     this.roundNo = 0;
     this.history = [];
     this.final = null;
+    this.startLives();
     await this.newRound();
   }
 
@@ -213,16 +214,22 @@ class Room {
   // ---------- Solo sans bot (Le pont, Plus ou moins, La frise) : on joue seul jusqu'à l'erreur ----------
   dropBot() { this.players = this.players.filter((p) => !p.bot); }
   minPlayers() { return this.solo && !this.players.some((p) => p.bot) ? 1 : 2; }
-  // Fin de la partie solo : réussite (pont atteint) ou erreur. Le record de la session est gardé.
+  // Vies (solo sans bot) : le réglage « Pour gagner » sert de nombre de vies (3 par défaut).
+  startLives() { this.lives = this.minPlayers() === 1 ? Math.min(5, Math.max(1, this.settings.target || 3)) : null; this.lifeLoss = null; }
+  loseLife(reason, next) {
+    this.lives--;
+    this.lifeLoss = { reason, left: this.lives, id: (this.lifeSeq = (this.lifeSeq || 0) + 1) };
+    if (this.lives <= 0) return this.endSolo(false, reason, this.players[0] ? this.players[0].score : 0);
+    next();
+  }
+  // Fin de la partie solo : plus de vies. Le record de la session est gardé.
   endSolo(won, reason, count) {
-    for (const t of ['timer', 'showTimer', 'botTimer', 'koTimer']) clearTimeout(this[t]);
+    for (const t of ['timer', 'showTimer', 'botTimer', 'koTimer', 'soloTimer']) clearTimeout(this[t]);
     const r = this.round;
     r.deadline = null; r.reason = reason; r.winner = won ? 0 : null;
-    // Record de la session : la plus longue série (quiz) ou le pont le plus court (pont réussi).
-    let record = false;
-    if (this.mode === 'bridge') {
-      if (won && (this.soloBest == null || count < this.soloBest)) { record = this.soloBest != null; this.soloBest = count; }
-    } else if (this.soloBest == null || count > this.soloBest) { record = this.soloBest != null && count > 0; this.soloBest = count; }
+    // Record de la session : le meilleur total (bonnes réponses ou ponts réussis).
+    const record = this.soloBest != null && count > this.soloBest;
+    if (this.soloBest == null || count > this.soloBest) this.soloBest = count;
     this.soloPlays = (this.soloPlays || 0) + 1;
     this.final = { solo: true, won: !!won, count, best: this.soloBest, record: !!record, plays: this.soloPlays };
     this.phase = 'finished';
@@ -679,6 +686,8 @@ class Room {
       final: this.final,
       settings: this.settings,
       roundNo: this.roundNo,
+      lives: this.lives ?? null,
+      lifeLoss: this.lifeLoss || null,
       players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: this.round && {
         ...this.round,

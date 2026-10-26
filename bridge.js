@@ -71,6 +71,13 @@ class BridgeRoom extends Room {
     this.broadcast();
   }
 
+  // Pendant l'annonce (pont réussi / raté en solo), plus aucune action jusqu'au pont suivant.
+  paused() { const r = this.round; return !!(r && (r.solved || r.failed)); }
+  answer(token, d) { if (!this.paused()) return super.answer(token, d); }
+  giveUp(token) { if (!this.paused()) return super.giveUp(token); }
+  useJoker(token) { if (!this.paused()) return super.useJoker(token); }
+  timeout() { if (!this.paused()) return super.timeout(); }
+
   // Le départ est tiré par le jeu : pas de choix d'artiste de départ.
   randomStart() {}
 
@@ -80,7 +87,15 @@ class BridgeRoom extends Room {
     if (r.target && same(a, r.target)) {
       r.chain.push({ artist: a, by: r.turn, track, byAppeal, rare: !byAppeal && !track.joker && !!track.rare, joker: !!track.joker });
       this.emitAll('link', { track, artist: a });
-      if (this.solo) return this.endSolo(true, 'bridge', r.chain.length - 1);
+      if (this.solo) {
+        // Solo : un pont de plus au compteur, puis le suivant.
+        this.players[0].score++;
+        clearTimeout(this.timer); r.deadline = null;
+        r.solved = { links: r.chain.length - 1 };
+        this.broadcast();
+        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, 3500);
+        return;
+      }
       return this.endRound(r.turn, 'bridge');
     }
     return super.accept(a, track, byAppeal);
@@ -90,14 +105,23 @@ class BridgeRoom extends Room {
     const v = super.view(forToken);
     v.mode = 'bridge';
     // Le chemin trouvé par le jeu n'est montré qu'une fois la manche finie.
-    if (v.round && this.phase === 'playing') v.round.solution = undefined;
+    if (v.round && this.phase === 'playing' && !this.round.failed) v.round.solution = undefined;
     return v;
   }
 
   // Pas de bot : en solo, on cherche seul le chemin ; sécher ou le chrono = partie perdue.
   botTick() {}
   eliminate(i, reason) {
-    if (this.solo) return this.endSolo(false, reason, Math.max(0, this.round.chain.length - 1));
+    // Solo : une vie de moins ; on montre le chemin prévu, puis un nouveau pont.
+    if (this.solo) {
+      const r = this.round;
+      clearTimeout(this.timer); clearTimeout(this.koTimer); r.deadline = null;
+      return this.loseLife(reason, () => {
+        r.failed = { reason };
+        this.broadcast();
+        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, 3500);
+      });
+    }
     return super.eliminate(i, reason);
   }
   // Seul, personne pour valider un feat à la main.

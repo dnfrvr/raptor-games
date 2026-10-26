@@ -136,7 +136,7 @@ class QuizRoom extends Room {
       if (this.mode === 'fans') r.items.push(it);
       else { r.items.push(it); r.items.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0)); }
       r.chain.push({ artist: { name: it.artist ? it.artist.name : it.track.title }, by: i });
-      if (this.solo) this.players[i].score = r.items.length - 1; // en solo, le score affiché = la série en cours
+      if (this.solo) this.players[i].score++; // en solo : total de bonnes réponses
     }
     this.broadcast();
     this.showTimer = setTimeout(async () => {
@@ -171,7 +171,17 @@ class QuizRoom extends Room {
 
   eliminate(i, reason) {
     const r = this.round;
-    if (this.solo) return this.endSolo(false, reason, Math.max(0, r.items.length - 1));
+    // Solo : une vie de moins, et on continue (au Plus ou moins, l'artiste raté devient la nouvelle référence).
+    if (this.solo) return this.loseLife(reason, () => {
+      if (this.mode === 'fans' && r.next) r.items.push(r.next);
+      r.next = null;
+      r.checking = { loading: true };
+      this.broadcast();
+      this.take(r).then((next) => {
+        if (this.round !== r || this.phase !== 'playing') return;
+        r.checking = false; r.next = next; this.resetClock(); this.broadcast();
+      });
+    });
     r.lastOut = { who: i, reason, on: null };
     r.out.push(r.lastOut);
     const alive = this.alive();

@@ -566,9 +566,20 @@ function importMemory(data) {
 const memoryStats = () => ({ pairs: featMemo.size, artists: partnerIdx.size, unsaved: memoDirty });
 
 // Sons les plus écoutés d'un artiste (blind test) : seulement ceux qui ont un extrait audio.
+// Pour les petits artistes, Deezer ne renvoie parfois que 1 ou 2 sons (voire aucun) dans le « top » :
+// on complète alors avec la recherche de son nom et les sons de ses sorties (ceux qui ont un extrait).
 async function artistTop(a, limit = 50) {
-  const top = await get(`/artist/${a.id}/top?limit=${limit}`);
-  return (top.data || []).filter((t) => t.preview);
+  const top = await get(`/artist/${a.id}/top?limit=${limit}`).catch(() => ({ data: [] }));
+  let list = (top.data || []).filter((t) => t.preview);
+  if (list.length < 8) {
+    const [search, own] = await Promise.all([
+      get(`/search?q=${encodeURIComponent(a.name)}&limit=50`).catch(() => ({ data: [] })),
+      list.length < 3 ? albumTracks(a, 8) : Promise.resolve([]),
+    ]);
+    const mine = (search.data || []).filter((t) => matches(t.artist, a));
+    list = uniqueByTitle(dedupe([...list, ...mine, ...own])).filter((t) => t.preview);
+  }
+  return list.slice(0, limit);
 }
 
 // Recherche d'un son précis d'un artiste (blind test : le joueur tape le titre qu'il veut faire deviner).

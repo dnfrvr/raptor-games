@@ -571,7 +571,7 @@ body.ko-open .reacts { visibility: hidden; }
 .modes .chip.wide { grid-column: 1 / -1; }
 
 /* Le pont : l'arrivée */
-.goal { display: inline-flex; align-items: center; gap: 10px; margin: 14px auto 0; padding: 8px 14px 8px 10px; background: var(--deep); border: 2px dashed var(--yellow); }
+.goal { display: flex; width: fit-content; align-items: center; gap: 10px; margin: 14px auto 0; padding: 8px 14px 8px 10px; background: var(--deep); border: 2px dashed var(--yellow); }
 .stage { text-align: center; }
 .goal-k { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--yellow); }
 .goal b { font-family: var(--display); font-weight: 400; font-size: 20px; text-transform: uppercase; }
@@ -600,4 +600,8 @@ body.ko-open .reacts { visibility: hidden; }
 .qz-wrong { padding: 8px; text-align: center; font-weight: 800; color: var(--paper); background: var(--red); }
 .solo-best { margin: 14px auto 0; font-size: 15px; color: var(--mute); }
 .solo-best b { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--yellow); margin-left: 6px; }
+.hearts { margin-left: 8px; letter-spacing: 2px; font-style: normal; }
+.hearts i { font-style: normal; color: var(--line); }
+.hearts i.on { color: var(--red); }
+.hearts.hit { display: inline-block; animation: shakeX .45s; }
 

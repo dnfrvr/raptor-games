@@ -283,11 +283,12 @@
     $('#settings').classList.toggle('readonly', !isHost);
     $('#settingsSummary').hidden = isHost;
     const blind = S.mode === 'blind';
-    const unit = blind ? 'point' : 'manche';
+    const unit = soloAlone ? 'vie' : blind ? 'point' : 'manche';
     $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#levelSet').hidden = !isHost || !S.solo || soloAlone;
-    $('#targetSet').hidden = !isHost || soloAlone;
+    $('#targetSet').hidden = !isHost;
+    $('#targetSet .field').textContent = soloAlone ? 'Vies' : 'Pour gagner';
     if (S.solo && isHost) {
       const el = $('#levelChips');
       el.innerHTML = LEVELS.map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === S.settings.botLevel}" class="chip ${v === S.settings.botLevel ? 'on' : ''}" data-v="${v}">${l}</button>`).join('');
@@ -300,17 +301,17 @@
       el.querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { turnSeconds: Number(b.dataset.v) })));
 
       $('#stepper').classList.toggle('off', t === 0);
-      const maxT = blind ? 20 : 10;
+      const maxT = soloAlone ? 5 : blind ? 20 : 10;
       $('#targetOut').textContent = t ? plural(t, unit) : '—';
       $('#targetMinus').disabled = t <= 1;
       $('#targetPlus').disabled = t >= maxT;
       $('#targetMinus').onclick = () => socket.emit('settings', { target: Math.max(1, (t || 3) - (t ? 1 : 0)) });
       $('#targetPlus').onclick = () => socket.emit('settings', { target: Math.min(maxT, (t || 2) + 1) });
-      $('#targetInf').hidden = blind || S.mode === 'fans' || S.mode === 'timeline';
+      $('#targetInf').hidden = blind || soloAlone || S.mode === 'fans' || S.mode === 'timeline';
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
-      $('#targetHint').textContent = blind ? `Le premier à ${plural(t, 'point')} gagne. Artiste trouvé : +1, titre en plus : +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
+      $('#targetHint').textContent = soloAlone ? `Chaque erreur coûte une vie. ${S.mode === 'bridge' ? 'Relie un maximum de ponts' : 'Fais le plus de bonnes réponses'} avant de toutes les perdre.` : blind ? `Le premier à ${plural(t, 'point')} gagne. Artiste trouvé : +1, titre en plus : +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
     }
 
     $('#startBtn').hidden = !isHost;
@@ -372,7 +373,8 @@
       el.classList.toggle('me', i === S.me);
       el.classList.toggle('out', S.phase === 'playing' && outSet.has(i));
     });
-    $('#roundLabel').textContent = S.mode === 'bridge' && S.solo ? 'Le pont, solo' : S.settings.target ? `Manche ${S.roundNo}, premier à ${S.settings.target}` : `Manche ${S.roundNo}, sans limite`;
+    if (S.mode === 'bridge' && S.solo) { $('#roundLabel').innerHTML = `Le pont ${hearts()}`; lifeNotice(); }
+    else $('#roundLabel').textContent = S.settings.target ? `Manche ${S.roundNo}, premier à ${S.settings.target}` : `Manche ${S.roundNo}, sans limite`;
     syncMute();
 
     if (!r) return;
@@ -433,7 +435,9 @@
     const banner = $('#turnBanner');
     banner.hidden = !playing;
     banner.className = 'turn ' + (myTurn ? 'me' : 'them');
-    banner.innerHTML = bridge && choosing ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
+    banner.innerHTML = r.solved ? `Pont réussi en ${plural(r.solved.links, 'feat')} ! <b>+1</b>`
+      : r.failed ? `Raté.${r.solution && r.solution.via ? ` Le jeu passait par <b>${esc(r.solution.via.name)}</b>.` : ''} Pont suivant…`
+      : bridge && choosing ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
       : choosing
       ? (myTurn ? 'À toi de choisir l’artiste de départ.' : `${esc(turnName)} choisit l’artiste de départ.`)
       : myTurn ? `À toi. Qui a fait un son avec <b>${esc(cur.name)}</b> ?` : `${esc(turnName)} cherche un feat avec <b>${esc(cur.name)}</b>.`;
@@ -453,7 +457,8 @@
     document.title = !playing ? 'Roland Gamos' : myTurn ? '● À toi | Roland Gamos' : `${turnName} joue | Roland Gamos`;
 
     // --- Formulaire du joueur actif ---
-    $('#playForm').hidden = !myTurn || (bridge && choosing);
+    const soloPause = !!(r.solved || r.failed);
+    $('#playForm').hidden = !myTurn || (bridge && choosing) || soloPause;
     $('#songInput').hidden = choosing;
     $('#giveupBtn').hidden = choosing;
     $('#randomBtn').hidden = !choosing;
@@ -584,7 +589,8 @@
       el.classList.toggle('me', i === S.me);
       el.classList.toggle('out', S.phase === 'playing' && outSet.has(i));
     });
-    $('#roundLabel').textContent = S.solo ? (fans ? 'Plus ou moins, solo' : 'La frise, solo') : `Manche ${S.roundNo}, premier à ${S.settings.target}`;
+    $('#roundLabel').innerHTML = S.solo ? `${fans ? 'Plus ou moins' : 'La frise'} ${hearts()}` : `Manche ${S.roundNo}, premier à ${S.settings.target}`;
+    lifeNotice();
     $('#muteBtn').hidden = true; $('#jokerBtn').hidden = true; $('#judgeOverlay').hidden = true; $('#ko').hidden = true;
     $('#btPanel').hidden = true; $('#playForm').hidden = true; $('#goal').hidden = true; $('#proof').hidden = true;
     $('#chainWrap').hidden = true;
@@ -816,7 +822,9 @@
         }
         fb.hidden = false; fb.className = 'feedback';
         fb.innerHTML = e.why === 'nopreview'
-          ? `<p>Aucun extrait disponible pour <b>${esc(e.artist.name)}</b> (ou tous déjà joués). Choisis un autre artiste.</p>`
+          ? `<p>Deezer n’a aucun extrait audio pour <b>${esc(e.artist.name)}</b>. Choisis un autre artiste.</p>`
+          : e.why === 'allused'
+          ? `<p>Tous les sons de <b>${esc(e.artist.name)}</b> ont déjà été joués. Choisis un autre artiste.</p>`
           : `<p>Ce n’est pas <b>${esc(e.artist.name)}</b>.${left > 0 ? ` Encore ${plural(left, 'essai')}.` : ''}</p>`;
       } else fb.hidden = true;
     }
@@ -1050,6 +1058,24 @@
     }
   }
 
+  // Vies restantes (solo sans bot), et annonce quand on en perd une.
+  function hearts() {
+    if (S.lives == null) return '';
+    const max = Math.min(5, Math.max(1, S.settings.target || 3));
+    return `<span class="hearts" aria-label="${plural(S.lives, 'vie')} sur ${max}">${'<i class="on">♥</i>'.repeat(Math.max(0, S.lives))}${'<i>♥</i>'.repeat(Math.max(0, max - S.lives))}</span>`;
+  }
+  let lastLifeId = null;
+  function lifeNotice() {
+    const l = S.lifeLoss;
+    const id = l ? l.id : 0;
+    if (lastLifeId !== null && id && id !== lastLifeId && S.phase === 'playing') {
+      toast(l.left > 1 ? `Une vie en moins, il t’en reste ${l.left}` : 'Dernière vie !', 2600);
+      sfx.out();
+      const h = document.querySelector('.hearts'); if (h) { h.classList.remove('hit'); void h.offsetWidth; h.classList.add('hit'); }
+    }
+    lastLifeId = id;
+  }
+
   // Fin d'une partie solo sans bot (pont, plus ou moins, frise) : le résultat et le record de la session.
   function renderSoloEnd(r) {
     const f = S.final;
@@ -1059,15 +1085,15 @@
     document.body.classList.add('sheet-open');
     const bridge = S.mode === 'bridge';
     $('#endKicker').textContent = bridge ? 'Le pont' : S.mode === 'fans' ? 'Plus ou moins' : 'La frise';
-    $('#endTitle').textContent = bridge ? (f.won ? 'Pont réussi' : 'Perdu') : f.record ? 'Nouveau record' : 'Perdu';
-    sheet.classList.toggle('win', !!(f.won || f.record));
+    $('#endTitle').textContent = f.record ? 'Nouveau record' : 'Plus de vies';
+    sheet.classList.toggle('win', !!f.record);
     const why = r.reason === 'timeout' ? 'Temps écoulé' : r.reason === 'ko' ? 'K.O., plus aucun feat possible' : r.reason === 'giveup' ? 'Tu as séché' : r.reason === 'tries' ? 'Plus d’essais' : 'Mauvaise réponse';
-    $('#endText').textContent = bridge
-      ? (f.won ? `Tu relies ${r.start ? r.start.name : ''} à ${r.target ? r.target.name : ''} en ${plural(f.count, 'feat')}.` : `${why}. Il fallait rejoindre ${r.target ? r.target.name : ''}.`) + (r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '')
-      : `${why} après une série de ${goodAnswers(f.count)}.`;
+    $('#endText').textContent = (bridge
+      ? `${f.count ? `${plural(f.count, 'pont')} réussi${f.count > 1 ? 's' : ''}` : 'Aucun pont réussi'} avec ${plural(S.settings.target || 3, 'vie')}. Dernier pont : ${why.toLowerCase()}, il fallait rejoindre ${r.target ? r.target.name : ''}.` + (r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '')
+      : `${goodAnswers(f.count)} avec ${plural(S.settings.target || 3, 'vie')}.`);
     $('#endExamples').hidden = true;
     $('#endScore').innerHTML = f.best != null && f.plays > 1
-      ? `<p class="solo-best">${bridge ? 'Pont le plus court' : 'Meilleure série'} de la session : <b>${f.best}</b></p>` : '';
+      ? `<p class="solo-best">Record de la session : <b>${f.best}</b></p>` : '';
     $('#endRecap').hidden = true;
     const btn = $('#endBtn');
     btn.hidden = false; btn.textContent = 'Rejouer'; btn.onclick = () => socket.emit('start');
@@ -1358,7 +1384,7 @@
     const total = S.settings.turnSeconds * 1000;
     if (!total) return reset('∞');
     if (r.chain && !r.chain.length) return reset('—');
-    if (S.mode === 'blind' && r.step === 'reveal') return reset('—');
+    if (S.mode === 'blind' && r.step !== 'guess') return reset('—');
     const left = r.paused ? r.remaining : Math.max(0, r.msLeft - (performance.now() - stateAt));
     const held = r.paused && (r.checking || r.appeal);
     el.classList.toggle('paused', !!held);

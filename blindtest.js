@@ -72,6 +72,12 @@ class BlindRoom extends Room {
   next() {}
 
   nextPlayer(i) { return (i + 1) % this.players.length; }
+  // Pas de chrono pour choisir l'artiste et le son à faire deviner : seulement pour celui qui devine.
+  startClock() {
+    const r = this.round;
+    if (r && (r.step === 'propose' || r.step === 'pick')) { clearTimeout(this.timer); r.deadline = null; return; }
+    return super.startClock();
+  }
   usedArtist() { return false; } // on peut reproposer un artiste (mais jamais le même son)
   // Rien de tout ça dans le blind test.
   appeal() {} judge() {} grant() {} koRelaunch() {} koGiveUp() {} checkKO() {}
@@ -124,14 +130,16 @@ class BlindRoom extends Room {
     this.pauseClock();
     this.broadcast();
     let options = [];
+    let found = 0;
     try {
       const top = await deezer.artistTop(a, 50);
+      found = top.length;
       options = top.filter((t) => !this.usedTracks.has(t.id)).slice(0, OPTIONS).map(deezer.trackOut);
     } catch (e) { console.error('blind top', e.message); }
     if (this.round !== r || r.step !== 'propose') return;
     r.checking = false;
     if (!options.length) {
-      r.lastError = { artist: a, why: 'nopreview' };
+      r.lastError = { artist: a, why: found ? 'allused' : 'nopreview' };
       this.startClock();
       return this.broadcast();
     }
