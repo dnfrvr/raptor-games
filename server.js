@@ -6,6 +6,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 const deezer = require('./deezer');
 const { Room } = require('./game');
+const { BlindRoom } = require('./blindtest');
 
 if (process.env.DEEZER_MOCK) require('./mock-deezer').install(deezer);
 // Mémoire des feats sauvegardée sur Upstash (si configuré sur Render) : rechargée au démarrage.
@@ -55,7 +56,7 @@ app.get('/api/artists', async (req, res) => {
 app.get('/api/room/:code', (req, res) => {
   const r = rooms.get(String(req.params.code).toUpperCase());
   if (!r) return res.json({ exists: false });
-  res.json({ exists: true, host: r.players[0] ? r.players[0].name : null, full: r.solo || r.players.length >= 8, started: r.phase !== 'lobby', players: r.players.length, phase: r.phase });
+  res.json({ exists: true, mode: r.mode || 'feat', host: r.players[0] ? r.players[0].name : null, full: r.solo || r.players.length >= 8, started: r.phase !== 'lobby', players: r.players.length, phase: r.phase });
 });
 
 app.get('/health', (_, res) => res.send('ok'));
@@ -68,10 +69,11 @@ io.on('connection', (socket) => {
 
   const fail = (msg) => socket.emit('oops', msg);
 
-  socket.on('create', ({ token: t, name, solo }) => {
+  socket.on('create', ({ token: t, name, solo, mode }) => {
     if (!t) return;
     token = String(t);
-    room = new Room(io, token, String(name || 'Joueur 1'), !!solo);
+    const Kind = mode === 'blind' ? BlindRoom : Room;
+    room = new Kind(io, token, String(name || 'Joueur 1'), !!solo);
     rooms.set(room.code, room);
     room.players[0].sockets.add(socket.id);
     room.broadcast();
@@ -104,7 +106,11 @@ io.on('connection', (socket) => {
   socket.on('joker', act(() => room.useJoker(token)));
   socket.on('react', act((d) => room.react(token, String(d.e || ''))));
   socket.on('koRelaunch', act(() => room.koRelaunch(token)));
-  socket.on('koGiveUp', act(() => room.koGiveUp(token)));
+  socket.on('koGiveUp', act(() => room.koGiveUp && room.koGiveUp(token)));
+  // Blind test : choisir le son à faire deviner, ou revenir au choix de l'artiste.
+  socket.on('bt:pick', act((d) => room.pick && room.pick(token, d.id)));
+  socket.on('bt:back', act(() => room.back && room.back(token)));
+  socket.on('bt:search', act((d) => room.searchTrack && room.searchTrack(token, d.q)));
   socket.on('leave', () => {
     if (!room || !token) return;
     if (room.leave(token)) { clearTimeout(room.timer); rooms.delete(room.code); }

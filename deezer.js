@@ -565,6 +565,28 @@ function importMemory(data) {
 }
 const memoryStats = () => ({ pairs: featMemo.size, artists: partnerIdx.size, unsaved: memoDirty });
 
+// Sons les plus écoutés d'un artiste (blind test) : seulement ceux qui ont un extrait audio.
+async function artistTop(a, limit = 50) {
+  const top = await get(`/artist/${a.id}/top?limit=${limit}`);
+  return (top.data || []).filter((t) => t.preview);
+}
+
+// Recherche d'un son précis d'un artiste (blind test : le joueur tape le titre qu'il veut faire deviner).
+async function searchArtistTracks(a, q, limit = 8) {
+  const res = await get(`/search?q=${encodeURIComponent(`${a.name} ${q}`)}&limit=40`);
+  // Seulement les sons dont le titre contient tout ce qui a été tapé (Deezer renvoie aussi des sons approchants).
+  const words = norm(q).split(' ').filter(Boolean);
+  const hits = (res.data || []).filter((t) => t.preview && words.every((w) => norm(t.title).includes(w)));
+  const credited = (t) => matches(t.artist, a) || featCredits(t.title).some((n) => norm(n) === norm(a.name))
+    || (t.contributors || []).some((c) => matches(c, a));
+  const out = hits.filter(credited);
+  // Invité sans « feat » dans le titre : la liste des artistes du son le dit (quelques vérifications au plus).
+  const unsure = hits.filter((t) => !credited(t)).slice(0, 6);
+  const details = await Promise.all(unsure.map((t) => getTrack(t.id).catch(() => null)));
+  details.forEach((d, k) => { if (d && (d.contributors || []).some((c) => matches(c, a))) out.push(unsure[k]); });
+  return out.slice(0, limit);
+}
+
 // ---------- Préparation pendant que le joueur réfléchit ----------
 // Dès qu'un artiste est en jeu, on charge ses partenaires en tâche de fond (basse priorité) : top, apparitions
 // chez d'autres, et si besoin la liste des artistes des sons de ses sorties. La réponse du joueur, le contrôle du K.O.
@@ -591,4 +613,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

@@ -25,8 +25,13 @@
     <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
     <header class="logo">
       <h1><span>Roland</span><span class="o">Gamos</span></h1>
-      <p class="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
+      <p class="pitch" id="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
     </header>
+
+    <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
+      <button type="button" class="chip" data-mode="feat" role="radio">Roland Gamos</button>
+      <button type="button" class="chip" data-mode="blind" role="radio">Blind test</button>
+    </div>
 
     <form id="homeForm" class="panel" autocomplete="off">
       <p class="invited" id="invited" hidden></p>
@@ -44,7 +49,12 @@
       </div>
     </form>
 
-    <ol class="rules" aria-label="Règles">
+    <ol class="rules" id="rulesBlind" aria-label="Règles du blind test" hidden>
+      <li><span><b>Tu choisis un artiste et un de ses sons.</b> Ou tu laisses le hasard faire.</span></li>
+      <li><span><b>Le joueur suivant écoute l'extrait.</b> Il trouve l'artiste : +1 point. Le titre en plus : +1.</span></li>
+      <li><span><b>Puis c'est lui qui propose.</b> 3 essais par extrait. Le premier au score fixé gagne.</span></li>
+    </ol>
+    <ol class="rules" id="rulesFeat" aria-label="Règles">
       <li><span><b>Un artiste est posé.</b> Celui qui commence la manche le choisit.</span></li>
       <li><span><b>Cite quelqu'un qui a fait un son avec lui.</b> Deezer vérifie le feat en direct.</span></li>
       <li><span><b>Ton adversaire enchaîne sur ce nouvel artiste.</b> Pas de répétition. Le premier qui sèche perd la manche.</span></li>
@@ -118,6 +128,7 @@
     </section>
 
     <p class="turn" id="turnBanner" aria-live="assertive"></p>
+    <section class="bt" id="btPanel" hidden></section>
 
     <form class="play" id="playForm" autocomplete="off" hidden>
       <div class="ac">

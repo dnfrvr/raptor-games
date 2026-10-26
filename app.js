@@ -35,6 +35,24 @@
 
   $('#nameInput').value = store.get('rg_name', '');
 
+  // Choix du jeu sur l'accueil : Roland Gamos (feats) ou Blind test. Mémorisé.
+  let mode = store.get('rg_mode', 'feat') === 'blind' ? 'blind' : 'feat';
+  function setMode(m) {
+    mode = m;
+    store.set('rg_mode', m);
+    document.querySelectorAll('#modes .chip').forEach((b) => {
+      const on = b.dataset.mode === m;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    });
+    $('#pitch').textContent = m === 'blind'
+      ? 'Le blind test rap : fais deviner tes sons, trouve ceux des autres.'
+      : 'Le jeu des featurings, contre un pote ou contre le bot.';
+    $('#rulesFeat').hidden = m === 'blind';
+    $('#rulesBlind').hidden = m !== 'blind';
+  }
+  document.querySelectorAll('#modes .chip').forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  setMode(mode);
+
   const ownRoom = inviteCode && inviteCode === roomCode;
   if (inviteCode && !ownRoom) {
     $('#homeBtn').textContent = 'Rejoindre';
@@ -66,8 +84,9 @@
         $('#joinCode').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.host) {
-        $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à une partie.`;
+        $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à ${info.mode === 'blind' ? 'un blind test' : 'une partie'}.`;
       }
+      if (info.exists && !info.started && !info.full) { $('#modes').hidden = true; if (info.mode) setMode(info.mode); }
     }).catch(() => {});
   }
 
@@ -79,7 +98,7 @@
     $('#homeBtn').disabled = true;
     setTimeout(() => ($('#homeBtn').disabled = false), 4000);
     if (inviteCode) socket.emit('join', { token, name, code: inviteCode });
-    else socket.emit('create', { token, name });
+    else socket.emit('create', { token, name, mode });
   });
 
   // Rejoindre avec un code (celui affiché en haut du salon de l'hôte).
@@ -118,7 +137,7 @@
     unlockAudio();
     $('#soloBtn').disabled = true;
     setTimeout(() => ($('#soloBtn').disabled = false), 4000);
-    socket.emit('create', { token, name, solo: true });
+    socket.emit('create', { token, name, solo: true, mode });
   });
 
   socket.on('connect', () => {
@@ -203,7 +222,7 @@
       if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
       else toast(S.code);
     };
-    renderGame();
+    if (S.mode === 'blind') renderBlind(); else renderGame();
   }
 
   // ================= SALON =================
@@ -235,7 +254,7 @@
     $('#copyBtn').hidden = full || !isHost;
     $('#inviteUrl').hidden = full || !isHost;
     $('#shareBtn').onclick = async () => {
-      if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
+      if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: S.mode === 'blind' ? 'Viens jouer au blind test contre moi' : 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
       copy(url);
     };
     $('#copyBtn').onclick = () => copy(url);
@@ -254,7 +273,9 @@
     // L'hôte règle ; l'invité voit un résumé lisible plutôt que des boutons grisés.
     $('#settings').classList.toggle('readonly', !isHost);
     $('#settingsSummary').hidden = isHost;
-    $('#settingsSummary').innerHTML = `${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, 'manche')}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    const blind = S.mode === 'blind';
+    const unit = blind ? 'point' : 'manche';
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#levelSet').hidden = !isHost || !S.solo;
     if (S.solo && isHost) {
@@ -269,15 +290,17 @@
       el.querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { turnSeconds: Number(b.dataset.v) })));
 
       $('#stepper').classList.toggle('off', t === 0);
-      $('#targetOut').textContent = t ? plural(t, 'manche') : '—';
+      const maxT = blind ? 20 : 10;
+      $('#targetOut').textContent = t ? plural(t, unit) : '—';
       $('#targetMinus').disabled = t <= 1;
-      $('#targetPlus').disabled = t >= 10;
+      $('#targetPlus').disabled = t >= maxT;
       $('#targetMinus').onclick = () => socket.emit('settings', { target: Math.max(1, (t || 3) - (t ? 1 : 0)) });
-      $('#targetPlus').onclick = () => socket.emit('settings', { target: Math.min(10, (t || 2) + 1) });
+      $('#targetPlus').onclick = () => socket.emit('settings', { target: Math.min(maxT, (t || 2) + 1) });
+      $('#targetInf').hidden = blind;
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
-      $('#targetHint').textContent = t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
+      $('#targetHint').textContent = blind ? `Le premier à ${plural(t, 'point')} gagne. Artiste trouvé : +1, titre en plus : +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
     }
 
     $('#startBtn').hidden = !isHost;
@@ -312,6 +335,8 @@
   }
 
   function renderGame() {
+    $('#btPanel').hidden = true;
+    $('#muteBtn').hidden = false;
     const r = S.round;
     const N = S.players.length;
     // À deux : on parle de l'adversaire par son nom ; à plusieurs : « les autres ».
@@ -510,6 +535,230 @@
     tickClock();
   }
 
+  // ================= BLIND TEST =================
+  // Même écran que le Roland Gamos : bandeau des scores, chrono, scène, formulaire, réactions, historique.
+  let btStepKey = '', btLogLen = -1, btFbKey = '', btGiveKey = '', btResultKey = '';
+  const nameOf = (i, cap) => (i === S.me ? (cap ? 'Tu' : 'toi') : S.players[i]?.name || '');
+
+  function renderBlind() {
+    const r = S.round;
+    const N = S.players.length;
+    buildScorebug(N);
+    const actor = r && S.phase === 'playing' ? (r.step === 'guess' ? r.guesser : r.step === 'reveal' ? -1 : r.proposer) : -1;
+    document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
+      const i = Number(el.dataset.p);
+      const p = S.players[i] || { name: '—', score: 0, online: false };
+      el.querySelector('.pname').textContent = p.name;
+      el.querySelector('.pj').textContent = '';
+      el.querySelector('.pscore').textContent = p.score;
+      el.classList.toggle('active', actor === i);
+      el.classList.toggle('off', !p.online);
+      el.classList.toggle('me', i === S.me);
+      el.classList.remove('out');
+    });
+    $('#roundLabel').textContent = `Extrait ${S.roundNo}, premier à ${plural(S.settings.target, 'point')}`;
+    $('#muteBtn').hidden = true;
+    $('#jokerBtn').hidden = true;
+    $('#judgeOverlay').hidden = true;
+    $('#ko').hidden = true;
+    if (!r) return;
+
+    const playing = S.phase === 'playing';
+    const iPropose = playing && r.proposer === S.me && (r.step === 'propose' || r.step === 'pick');
+    const iGuess = playing && r.guesser === S.me && r.step === 'guess';
+    const prop = S.players[r.proposer]?.name || '', gues = S.players[r.guesser]?.name || '';
+    const key = `${r.id}-${r.step}-${r.artist ? r.artist.id : ''}`;
+    const newStep = key !== btStepKey;
+
+    // --- Scène ---
+    if (newStep) {
+      btStepKey = key;
+      let html;
+      if (r.step === 'reveal' && r.artist) html = `${avatar(r.artist)}<span class="nm">${esc(r.artist.name)}</span>`;
+      else if (r.step === 'guess') html = `<button type="button" class="bt-disc" id="btDisc" data-prev="${esc(r.track && r.track.preview || '')}" aria-label="Écouter l’extrait"><span>▶</span></button><span class="nm q">Qui chante ?</span>`;
+      else if (r.step === 'pick' && r.artist) html = `${avatar(r.artist)}<span class="nm">${esc(r.artist.name)}</span>`;
+      else html = `<span class="av q" aria-hidden="true">♪</span><span class="nm q">${r.proposer === S.me ? 'À toi de choisir' : 'Choix du son'}</span>`;
+      $('#current').innerHTML = html;
+      $('#current').classList.remove('pop'); void $('#current').offsetWidth; $('#current').classList.add('pop');
+      if (r.step !== 'guess' || iGuess) { $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null; }
+      if (r.step === 'propose') audio.pause();
+      if (iPropose || iGuess) {
+        if (navigator.vibrate) try { navigator.vibrate(60); } catch {}
+        setTimeout(() => { $('#playForm').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('#artistInput').focus({ preventScroll: true }); }, 80);
+      }
+    }
+    const disc = $('#btDisc');
+    if (disc) {
+      syncPlayButtons();
+      disc.onclick = () => {
+        if (!r.track || !r.track.preview) return;
+        if (!audio.paused && audio.dataset.src === r.track.preview) audio.pause(); else playPreview(r.track.preview, true);
+      };
+    }
+    $('#proof').hidden = true;
+
+    // --- Bandeau ---
+    const banner = $('#turnBanner');
+    banner.hidden = !playing;
+    const res = r.result;
+    banner.className = 'turn ' + (iPropose || iGuess ? 'me' : 'them');
+    banner.innerHTML = r.step === 'reveal'
+      ? (res && res.points ? `${r.guesser === S.me ? 'Tu trouves' : esc(gues) + ' trouve'} ${res.title ? 'l’artiste et le titre' : 'l’artiste'} : <b>+${res.points}</b>`
+        : res && res.why === 'timeout' ? 'Temps écoulé : personne ne marque.' : res && res.why === 'pass' ? `${r.guesser === S.me ? 'Tu passes' : esc(gues) + ' passe'} : personne ne marque.` : 'Raté : personne ne marque.')
+      : r.step === 'guess'
+        ? (iGuess ? 'À toi : <b>quel artiste chante ?</b>' : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
+        : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b> : choisis un artiste.`)
+          : `${esc(prop)} choisit un son pour ${esc(nameOf(r.guesser))}.`;
+    document.title = !playing ? 'Roland Gamos' : (iPropose || iGuess) ? '● À toi | Blind test' : 'Blind test | Roland Gamos';
+
+    // --- Formulaire ---
+    const form = iGuess || (iPropose && r.step === 'propose');
+    $('#playForm').hidden = !form;
+    if (form) {
+      const busy = !!r.checking;
+      $('#songInput').hidden = !iGuess;
+      $('#songInput').placeholder = 'Titre du son (+1 point bonus)';
+      $('#giveupBtn').hidden = !iGuess;
+      $('#randomBtn').hidden = !iPropose;
+      $('#randomBtn').textContent = 'Au hasard';
+      $('#artistInput').placeholder = iGuess ? 'L’artiste que tu entends' : 'Un artiste à faire deviner';
+      $('#submitBtn').textContent = iGuess ? 'Valider' : 'Choisir';
+      const out = iGuess && (r.tries || 0) >= (r.maxTries || 3);
+      $('#artistInput').disabled = busy || out; $('#songInput').disabled = busy || out;
+      $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
+      if (btGiveKey !== key) { btGiveKey = key; armTwoTap($('#giveupBtn'), 'Je passe', 'Sûr ?', () => socket.emit('giveup')); }
+      const fb = $('#feedback');
+      if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Chargement des sons${r.checking.artist ? ` de ${esc(r.checking.artist.name)}` : ''}…`; }
+      else if (r.lastError) {
+        const e = r.lastError, left = (r.maxTries || 3) - (r.tries || 0);
+        const fk = JSON.stringify(e) + r.tries;
+        if (fk !== btFbKey) {
+          btFbKey = fk;
+          const f = $('#playForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+          if (navigator.vibrate) try { navigator.vibrate([30, 40, 30]); } catch {}
+          setTimeout(() => { const i = $('#artistInput'); i.focus({ preventScroll: true }); i.select(); }, 30);
+        }
+        fb.hidden = false; fb.className = 'feedback';
+        fb.innerHTML = e.why === 'nopreview'
+          ? `<p>Aucun extrait disponible pour <b>${esc(e.artist.name)}</b> (ou tous déjà joués). Choisis un autre artiste.</p>`
+          : `<p>Ce n’est pas <b>${esc(e.artist.name)}</b>.${left > 0 ? ` Encore ${plural(left, 'essai')}.` : ''}</p>`;
+      } else fb.hidden = true;
+    }
+
+    // --- Panneau : choix du son (celui qui propose) ou réponse ---
+    const panel = $('#btPanel');
+    const optsKey = iPropose && r.step === 'pick' ? 'pick-' + key : r.step === 'reveal' ? 'rev-' + key : '';
+    panel.hidden = !optsKey;
+    if (optsKey && panel.dataset.key !== optsKey) {
+      panel.dataset.key = optsKey;
+      if (r.step === 'pick') {
+        // Le champ de recherche n'est construit qu'une fois : la liste se met à jour dessous sans couper la saisie.
+        panel.innerHTML = `<input id="btSearch" placeholder="Un son précis de ${esc(r.artist.name)} ?" aria-label="Chercher un son de ${esc(r.artist.name)}" autocomplete="off" enterkeyhint="search">
+          <p class="small" id="btListHint"></p><ul class="bt-opts" id="btOpts"></ul>
+          <div class="play-row"><button type="button" class="btn" id="btRandomPick">Au hasard</button><button type="button" class="btn ghost" id="btBack">Autre artiste</button></div>`;
+        let t = null;
+        $('#btSearch').addEventListener('input', (e) => {
+          clearTimeout(t);
+          const q = e.target.value;
+          $('#btListHint').innerHTML = q.trim().length >= 2 ? '<span class="spin"></span>Recherche…' : '';
+          t = setTimeout(() => socket.emit('bt:search', { q }), 300);
+        });
+        $('#btSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); socket.emit('bt:search', { q: e.target.value }); } });
+        $('#btRandomPick').onclick = () => { audio.pause(); socket.emit('bt:pick', { id: null }); };
+        $('#btBack').onclick = () => socket.emit('bt:back');
+        panel.dataset.list = '';
+      } else {
+        const res2 = r.result || {};
+        const said = res2.points ? '' : r.lastError && r.lastError.why === 'wrong' ? `<p class="small">Dernière réponse : ${esc(r.lastError.artist.name)}</p>` : '';
+        const titleNote = res2.points && !res2.title && res2.song ? `<p class="small">Titre proposé : « ${esc(res2.song)} », pas le bon.</p>` : '';
+        panel.innerHTML = (r.track ? trackCard(r.track, false, []) : '') + said + titleNote
+          + (S.phase === 'playing' ? `<p class="small bt-next">Prochain extrait dans quelques secondes. ${esc(nameOf(r.guesser, true))} ${r.guesser === S.me ? 'proposes' : 'propose'} ensuite.</p>` : '');
+      }
+      bindTracks();
+    }
+    // Liste des sons proposés (les plus écoutés, ou résultats de la recherche tapée).
+    if (optsKey && r.step === 'pick') {
+      const listKey = (r.query || '') + '|' + r.options.map((o) => o.id).join(',');
+      if (panel.dataset.list !== listKey) {
+        panel.dataset.list = listKey;
+        const q = r.query || '';
+        const typed = ($('#btSearch').value || '').trim();
+        if (typed === q.trim() || typed.length < 2) {
+          $('#btListHint').innerHTML = q.length >= 2
+            ? (r.options.length ? `Sons de ${esc(r.artist.name)} pour « ${esc(q)} » :` : `Aucun son de ${esc(r.artist.name)} trouvé pour « ${esc(q)} ». Essaie un autre titre.`)
+            : `Ses sons les plus écoutés. Écoute, puis choisis. Ou tape un titre au-dessus.`;
+        }
+        $('#btOpts').innerHTML = r.options.map((t) => `<li><button type="button" class="bt-opt" data-id="${t.id}"><b>${esc(t.title)}</b>${t.album ? `<span>${esc(t.album)}</span>` : ''}</button>${t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">▶</button>` : ''}</li>`).join('');
+        $('#btOpts').querySelectorAll('.bt-opt').forEach((b) => (b.onclick = () => { audio.pause(); socket.emit('bt:pick', { id: Number(b.dataset.id) }); }));
+        bindTracks();
+      }
+    }
+
+    // --- Ce que voient les autres ---
+    const watching = playing && !iPropose && !iGuess && r.step !== 'reveal';
+    $('#watch').hidden = !watching;
+    if (watching) {
+      let txt = r.step === 'guess'
+        ? (r.lastError && r.lastError.why === 'wrong'
+          ? `${esc(gues)} a proposé <b>${esc(r.lastError.artist.name)}</b> : raté. Essai ${r.tries} sur ${r.maxTries || 3}. <span class="dots">Il cherche encore</span>`
+          : `<span class="dots">${esc(gues)} cherche</span>`)
+        : `<span class="dots">${esc(prop)} choisit un son</span>`;
+      const p = S.players[r.turn];
+      const alone = !S.players.some((x, i) => i !== S.me && !x.bot && x.online);
+      const leavable = p && !p.online && alone;
+      if (p && !p.online) txt = `${esc(p.name)} s'est déconnecté. La partie reprend dès son retour.` + (S.solo ? '' : `<span class="rejoin">Pour revenir : code <b>${esc(S.code)}</b> sur l’accueil.</span>`);
+      $('#watch').innerHTML = txt + (leavable ? `<button type="button" class="btn ghost small-btn" id="quitGameBtn">Quitter la partie</button>` : '');
+      if (leavable) $('#quitGameBtn').onclick = leaveRoom;
+    }
+
+    // --- Historique des extraits, le plus récent en haut ---
+    const log = S.log || [];
+    if (log.length !== btLogLen) {
+      btLogLen = log.length;
+      $('#chainTitle').textContent = log.length ? `Les extraits, ${log.length}` : 'Les extraits';
+      $('#chain').innerHTML = log.length ? log.map((l) => {
+        const pts = l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>';
+        return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
+      }).reverse().join('') : `<li class="empty">Les extraits joués s'affichent ici.</li>`;
+      bindTracks();
+    }
+
+    // Sons : bonne réponse, raté.
+    const rk = r.step === 'reveal' ? `${r.id}-${res ? res.points : 0}` : r.lastError ? `${r.id}-miss-${r.tries}` : '';
+    if (rk && rk !== btResultKey && btResultKey !== '') {
+      if (r.step === 'reveal') (res && res.points ? sfx.ding : sfx.out)(); else if (r.lastError.why === 'wrong') sfx.buzz();
+    }
+    btResultKey = rk || btResultKey || 'init';
+
+    renderBlindEnd();
+    tickClock();
+  }
+
+  function renderBlindEnd() {
+    const fin = S.phase === 'finished';
+    const sheet = $('#endSheet');
+    const wasHidden = sheet.hidden;
+    sheet.hidden = !fin;
+    document.body.classList.toggle('sheet-open', fin);
+    if (!fin) return;
+    const w = S.final ? S.final.winner : null;
+    $('#endKicker').textContent = 'Fin du blind test';
+    $('#endTitle').textContent = w == null ? 'Égalité' : w === S.me ? 'Tu gagnes le blind test' : `${S.players[w].name} gagne`;
+    sheet.classList.toggle('win', w === S.me);
+    $('#endText').textContent = w == null ? '' : `${w === S.me ? 'Tu atteins' : S.players[w].name + ' atteint'} ${plural(S.settings.target, 'point')} en ${plural(S.roundNo, 'extrait')}.`;
+    $('#endExamples').hidden = true;
+    const N = S.players.length;
+    $('#endScore').innerHTML = N === 2
+      ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
+      : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
+    renderRecap(S.final ? S.final.recap : null);
+    const btn = $('#endBtn');
+    btn.hidden = false; btn.textContent = 'Revanche'; btn.onclick = () => { unlockAudio(); socket.emit('start'); };
+    $('#stopBtn').hidden = true;
+    if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if (w === S.me) sfx.win(); else sfx.out(); }
+  }
+  socket.on('extract', ({ preview }) => { if (S && S.mode === 'blind' && preview) playPreview(preview, true); });
+
   function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
     if (r.checking && r.checking.verifying) {
@@ -692,6 +941,17 @@
     const key = JSON.stringify(rc);
     if (el.dataset.key === key) return;
     el.dataset.key = key;
+    if (rc.blind) {
+      el.innerHTML = `<p class="recap-title">Le récap</p><ul class="recap-players">${rc.players.map((st, i) => {
+        const p = S.players[i];
+        if (!p) return '';
+        const bits = [`${st.found} trouvé${st.found > 1 ? 's' : ''} sur ${st.heard}`];
+        if (st.titles) bits.push(`${st.titles} titre${st.titles > 1 ? 's' : ''}`);
+        if (st.stumped) bits.push(`${st.stumped} colle${st.stumped > 1 ? 's' : ''} posée${st.stumped > 1 ? 's' : ''}`);
+        return `<li class="recap-p p${i}${i === S.me ? ' me' : ''}"><span class="recap-name">${esc(p.name)}</span><span class="recap-stats">${bits.join(' · ')}</span></li>`;
+      }).join('')}</ul>`;
+      return;
+    }
     const L = rc.longest;
     const head = `<p class="recap-title">Le récap</p><ul class="recap-facts">`
       + `<li><b>${rc.totalFeats}</b><span>${rc.totalFeats > 1 ? 'feats' : 'feat'} en ${plural(rc.rounds, 'manche')}</span></li>`
@@ -787,6 +1047,8 @@
       const on = !audio.paused && audio.dataset.src === b.dataset.prev;
       b.classList.toggle('on', on); b.textContent = on ? '❚❚' : '▶';
     });
+    const d = document.getElementById('btDisc');
+    if (d) { const on = !audio.paused && audio.dataset.src === d.dataset.prev; d.classList.toggle('on', on); d.firstElementChild.textContent = on ? '❚❚' : '▶'; }
   }
   ['play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, syncPlayButtons));
   function syncMute() {
@@ -864,7 +1126,8 @@
     if (!r || S.phase !== 'playing') return reset('—');
     const total = S.settings.turnSeconds * 1000;
     if (!total) return reset('∞');
-    if (!r.chain.length) return reset('—');
+    if (r.chain && !r.chain.length) return reset('—');
+    if (S.mode === 'blind' && r.step === 'reveal') return reset('—');
     const left = r.paused ? r.remaining : Math.max(0, r.msLeft - (performance.now() - stateAt));
     const held = r.paused && (r.checking || r.appeal);
     el.classList.toggle('paused', !!held);
@@ -978,8 +1241,8 @@
 
   autocomplete($('#artistInput'), $('#acList'), (a) => {
     pickedArtist = a;
-    // Au départ, pas de titre à donner : on valide directement.
-    if (S?.round?.chain.length === 0) $('#playForm').requestSubmit();
+    // Au départ (ou artiste à faire deviner au blind test), pas de titre à donner : on valide directement.
+    if (S?.mode === 'blind' ? S.round?.step === 'propose' : S?.round?.chain.length === 0) $('#playForm').requestSubmit();
     else $('#songInput').focus();
   });
 

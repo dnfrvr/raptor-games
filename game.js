@@ -717,4 +717,4 @@ class Room {
   }
 }
 
-module.exports = { Room, TURN_CHOICES };
+module.exports = { Room, TURN_CHOICES, FR_RAPPERS, BOT_TOKEN, MAX_TRIES, AFTER_MISS_MS };

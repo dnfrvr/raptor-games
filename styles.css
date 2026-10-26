@@ -511,3 +511,32 @@ body.ko-open .reacts { visibility: hidden; }
 .recap-best { font-size: 13px; color: var(--mute); line-height: 1.35; }
 .recap-best b { color: var(--paper); }
 
+/* Choix du jeu sur l'accueil */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: -16px 0 22px; }
+.modes .chip { min-height: 48px; font-family: var(--display); font-weight: 400; font-size: 17px; white-space: nowrap; text-transform: uppercase; letter-spacing: .02em; }
+
+/* Blind test */
+.bt-disc {
+  width: 132px; height: 132px; border-radius: 50%; border: 6px solid var(--paper); cursor: pointer;
+  background: radial-gradient(circle, var(--yellow) 0 17%, var(--deep) 18% 21%, #1a2a5e 22% 100%);
+  box-shadow: 0 8px 0 var(--deep), 0 0 0 10px #ffd21f22; display: grid; place-items: center; color: var(--night);
+  font-size: 22px; font-weight: 800; transition: transform .1s;
+}
+.bt-disc:active { transform: scale(.96); }
+.bt-disc.on { animation: spinDisc 2.4s linear infinite; }
+@keyframes spinDisc { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bt-disc.on { animation: none; } }
+.bt { margin: 14px 0 18px; display: grid; gap: 10px; }
+.bt .small { text-align: center; }
+.bt-opts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bt-opts li { display: flex; align-items: center; gap: 8px; }
+.bt-opt {
+  flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 0; cursor: pointer;
+  background: var(--night-3); color: var(--paper); box-shadow: 0 4px 0 var(--deep);
+}
+.bt-opt:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--deep); }
+.bt-opt b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-opt span { font-size: 13px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-next { color: var(--dim); }
+#btSearch { width: 100%; }
+
