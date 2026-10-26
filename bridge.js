@@ -84,13 +84,13 @@ class BridgeRoom extends Room {
   // et qui a fait un son avec l'un d'eux (2 feats). Au-delà : « au moins 3 ».
   async distances(B) {
     const n = (x) => deezer.norm(x.name);
-    const t1 = new Map(); // nom → artiste
+    const t1 = new Map(); // nom → { artist, track } (a fait un son avec l'arrivée)
     const t2 = new Map(); // nom → intermédiaire (vers l'arrivée)
     try {
       const c1 = await deezer.findCollaborators(B, 100);
-      c1.forEach((o) => { if (!same(o.artist, B)) t1.set(n(o.artist), o.artist); });
-      deezer.knownPartners(B).forEach((o) => { if (!t1.has(n(o.artist))) t1.set(n(o.artist), o.artist); });
-      const firsts = [...t1.values()].filter((x) => x.id).slice(0, 20);
+      c1.forEach((o) => { if (!same(o.artist, B)) t1.set(n(o.artist), o); });
+      deezer.knownPartners(B).forEach((o) => { if (!t1.has(n(o.artist))) t1.set(n(o.artist), o); });
+      const firsts = [...t1.values()].map((o) => o.artist).filter((x) => x.id).slice(0, 20);
       const lists = await Promise.allSettled(firsts.map((x) => deezer.findCollaborators(x, 100)));
       lists.forEach((res, k) => {
         if (res.status !== 'fulfilled') return;
@@ -164,7 +164,7 @@ class BridgeRoom extends Room {
 
   async answer(token, { artist, song }) {
     const ctx = this.lane(token);
-    if (!ctx || ctx.l.checking || !artist || !artist.id || !artist.name) return;
+    if (!ctx || ctx.l.checking || ctx.l.arriving || !artist || !artist.id || !artist.name) return;
     const { i, l, r } = ctx;
     const a = { id: Number(artist.id), name: String(artist.name).slice(0, 80), picture: artist.picture || null };
     const cur = l.chain[l.chain.length - 1].artist;
@@ -180,18 +180,50 @@ class BridgeRoom extends Room {
     l.chain.push({ artist: a, track });
     l.left = this.left(r, a);
     deezer.prepare(a);
-    if (same(a, r.target)) {
-      l.done = true;
-      l.doneAt = Date.now() - r.startedAt;
-      if (this.solo || r.lanes.every((x) => x.done || x.gaveUp)) return this.finishRound('all');
-    }
+    if (same(a, r.target)) return this.arrive(r, l);
     this.broadcast();
+    this.autoArrive(r, l, a);
+  }
+
+  arrive(r, l, auto = false, at = Date.now()) {
+    l.done = true;
+    l.auto = auto;
+    l.doneAt = at - r.startedAt;
+    l.arriving = false;
+    if (this.solo || r.lanes.every((x) => x.done || x.gaveUp)) return this.finishRound('all');
+    this.broadcast();
+  }
+
+  // Arrivée automatique : si le rappeur qu'on vient d'ajouter a un son avec l'arrivée, le pont se termine tout seul
+  // (pas besoin de retaper l'arrivée). D'abord ce que le jeu sait déjà (partenaires connus de l'arrivée, mémoire des
+  // feats) : immédiat. Sinon, vérification complète sur Deezer en tâche de fond (feats moins connus : recherche,
+  // sorties, invités) ; le temps retenu est celui où le rappeur a été ajouté.
+  async autoArrive(r, l, a) {
+    const B = r.target;
+    const at = Date.now();
+    const len = l.chain.length;
+    const still = () => this.round === r && !r.results && !l.done && !l.gaveUp && l.chain.length === len;
+    const known = r.dist && r.dist.t1.get(deezer.norm(a.name));
+    let track = known && known.track ? known.track : deezer.knownFeat(a, B);
+    if (!track) {
+      l.arriving = true;
+      this.broadcast();
+      try { track = await deezer.findFeat(a, B, ''); } catch (_) { track = null; }
+      if (!still()) { if (l.chain.length === len) { l.arriving = false; this.broadcast(); } return; }
+      l.arriving = false;
+      if (!track) return this.broadcast();
+    }
+    if (!still()) return;
+    l.chain.push({ artist: B, track, auto: true });
+    l.left = 0;
+    this.emitAll('link', { track, artist: B });
+    this.arrive(r, l, true, at);
   }
 
   // Retirer son dernier maillon (on s'est engagé sur une mauvaise piste).
   undo(token) {
     const ctx = this.lane(token);
-    if (!ctx || ctx.l.checking || ctx.l.chain.length < 2) return;
+    if (!ctx || ctx.l.checking || ctx.l.arriving || ctx.l.chain.length < 2) return;
     ctx.l.chain.pop();
     ctx.l.left = this.left(ctx.r, ctx.l.chain[ctx.l.chain.length - 1].artist);
     ctx.l.lastError = null;
@@ -276,7 +308,7 @@ class BridgeRoom extends Room {
       paused: !r.deadline, out: [],
       // Ma chaîne (complète) ; celle des autres reste cachée pendant la course (seulement leur avancée).
       chain: mine ? mine.chain : [],
-      me: mine ? { done: mine.done, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? (r.start ? this.left(r, r.start) : null) } : null,
+      me: mine ? { done: mine.done, auto: !!mine.auto, arriving: !!mine.arriving, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? (r.start ? this.left(r, r.start) : null) } : null,
       shortest: r.shortest ?? null,
       pathLen: r.pathLen ?? null,
       checking: mine ? mine.checking : false,

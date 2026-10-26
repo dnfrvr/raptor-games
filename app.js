@@ -801,7 +801,7 @@
     banner.innerHTML = r.loading ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
       : r.error ? 'Deezer ne répond pas, impossible de tirer un pont.'
       : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution ? ` Chemin le plus court : <b>${esc(solPath(r))}</b>.` : ''} Pont suivant…`)
-      : me.done ? `Arrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
+      : me.done ? `${me.auto && mine.length > 2 ? `<b>${esc(mine[mine.length - 2].artist.name)}</b> a un son avec <b>${esc(r.target.name)}</b> : ` : 'A'}${me.auto && mine.length > 2 ? 'a' : ''}rrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
       : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
         + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
@@ -813,7 +813,7 @@
     $('#playForm').classList.add('br-form');
     $('#playForm').classList.toggle('solo-action', mine.length < 2);
     if (canPlay) {
-      const busy = !!me.checking;
+      const busy = !!me.checking || !!me.arriving;
       $('#songInput').hidden = false;
       $('#songInput').placeholder = 'Titre du son (facultatif)';
       $('#artistInput').placeholder = `Un artiste qui a fait un son avec ${cur.name}`;
@@ -826,7 +826,8 @@
       if (brGiveKey !== gk) { brGiveKey = gk; armTwoTap($('#giveupBtn'), 'Abandonner', 'Sûr ?', () => socket.emit('giveup')); }
       for (const id of ['#artistInput', '#songInput', '#submitBtn', '#randomBtn', '#giveupBtn']) $(id).disabled = busy;
       const fb = $('#feedback');
-      if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(me.checking.artist.name)}…`; }
+      if (me.arriving) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>${esc(cur.name)} a-t-il déjà un son avec ${esc(r.target.name)} ? Le jeu vérifie sur Deezer…`; }
+      else if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(me.checking.artist.name)}…`; }
       else if (me.lastError) {
         const e = me.lastError;
         const k = JSON.stringify(e) + mine.length;
