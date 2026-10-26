@@ -1,13 +1,14 @@
-# Roland Gamos — en ligne, à deux
+# Raptor Games
 
-Le jeu de Rap Jeu : on part d'un artiste, chacun à son tour cite un artiste qui a fait un son avec le précédent. Pas de répétition, et le premier qui sèche (ou laisse filer le chrono) perd la manche.
+Les jeux rap entre potes, en ligne, avec Rex le raptor. Tout est vérifié en direct sur l'API publique Deezer (aucune clé requise).
 
-- **Featurings vérifiés en direct** sur l'API publique Deezer (catalogue à jour, aucune clé requise), avec la pochette et l'extrait 30 s du son qui prouve le feat.
-- **Lien d'invitation** : tu crées un salon, tu envoies le lien, ton pote arrive direct dans la partie.
-- **Avec ou sans chrono** (10 à 60 s par tour, ou illimité), en 1, 3 ou 5 manches gagnantes.
-- **Tous genres** : rap, pop, afro, latino, électro…
-- **Arbitrage** : si Deezer ne trouve pas un feat qui existe vraiment, le joueur peut demander à l'adversaire de le valider (une fois par tour, chrono en pause).
-- Reconnexion automatique si on recharge la page ou si le réseau saute.
+- **Roland Gamos** : chacun son tour cite un artiste qui a fait un son avec le précédent. Pas de répétition ; le premier qui sèche perd la manche.
+- **Le pont** : relier deux rappeurs par une chaîne de feats.
+- **Blind test** : chacun fait deviner un son au suivant ; l'artiste rapporte 1 point, le titre 1 de plus.
+- **Plus ou moins** : qui a le plus de fans sur Deezer ?
+- **La frise** : placer chaque son sur la frise des dates de sortie.
+
+De 2 à 8 joueurs avec un lien ou un code d'invitation, ou en solo (contre le bot, ou seul avec des vies). Reconnexion automatique, mémoire des feats sauvegardée sur Upstash (facultatif).
 
 ## Lancer en local
 
@@ -26,7 +27,7 @@ L'app a besoin d'un serveur Node qui garde les WebSockets ouverts : Vercel/Netli
 **Render (le plus simple)**
 1. Mets ce dossier sur un repo GitHub.
 2. Sur [render.com](https://render.com) → *New* → *Blueprint* → choisis le repo (le fichier `render.yaml` configure tout).
-3. Une fois déployé, ouvre l'URL `https://roland-gamos-xxxx.onrender.com` et crée un salon.
+3. Une fois déployé, ouvre l'URL `https://raptor-games.onrender.com` et crée un salon.
 
 Alternatives qui marchent aussi telles quelles : Railway, Fly.io, Koyeb (commande de démarrage `npm start`, port lu depuis `PORT`).
 
