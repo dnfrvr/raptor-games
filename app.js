@@ -744,6 +744,7 @@
   }
 
   // ================= LE PONT (course en parallèle) =================
+  const solPath = (r) => (r.solution && r.solution.path ? r.solution.path.map((x) => x.name).join(' → ') : r.solution && r.solution.via ? `${r.start ? r.start.name : ''} → ${r.solution.via.name} → ${r.target ? r.target.name : ''}` : '');
   const fmtTime = (ms) => { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   let brKey = '', brLen = -1, brErrKey = '', brGiveKey = '', brResKey = '';
   function renderBridge() {
@@ -799,7 +800,7 @@
     banner.className = 'turn ' + (playing && !me.done && !me.gaveUp ? 'me' : 'them');
     banner.innerHTML = r.loading ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
       : r.error ? 'Deezer ne répond pas, impossible de tirer un pont.'
-      : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution && r.solution.via ? ` Le jeu passait par <b>${esc(r.solution.via.name)}</b>.` : ''} Pont suivant…`)
+      : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution ? ` Chemin le plus court : <b>${esc(solPath(r))}</b>.` : ''} Pont suivant…`)
       : me.done ? `Arrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
       : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
@@ -871,8 +872,8 @@
     $('#endKicker').textContent = fin ? 'Fin de la partie' : `Fin du pont ${S.roundNo}`;
     $('#endTitle').textContent = w == null ? 'Personne n’est arrivé' : fin ? (w === S.me ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (w === S.me ? 'Pont pour toi' : `Pont pour ${S.players[w].name}`);
     sheet.classList.toggle('win', w === S.me);
-    $('#endText').textContent = r.solution && r.solution.via
-      ? `Chemin le plus court : ${r.start ? r.start.name : ''} → ${r.solution.via.name} → ${r.target ? r.target.name : ''} (${plural(r.shortest || 2, 'feat')}).`
+    $('#endText').textContent = r.solution
+      ? `Chemin le plus court : ${solPath(r)} (${plural(r.shortest || 3, 'feat')}).`
       : `${r.start ? r.start.name : ''} → ${r.target ? r.target.name : ''}.`;
     const ex = $('#endExamples');
     ex.hidden = false; ex.dataset.key = '';
@@ -1279,7 +1280,7 @@
     sheet.classList.toggle('win', !!f.record);
     const why = r.reason === 'timeout' ? 'Temps écoulé' : r.reason === 'ko' ? 'K.O., plus aucun feat possible' : r.reason === 'giveup' ? 'Tu as séché' : r.reason === 'tries' ? 'Plus d’essais' : 'Mauvaise réponse';
     $('#endText').textContent = (bridge
-      ? `${f.count ? `${plural(f.count, 'pont')} réussi${f.count > 1 ? 's' : ''}` : 'Aucun pont réussi'} avec ${plural(S.settings.target || 3, 'vie')}. Dernier pont : ${why.toLowerCase()}, il fallait rejoindre ${r.target ? r.target.name : ''}.` + (r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '')
+      ? `${f.count ? `${plural(f.count, 'pont')} réussi${f.count > 1 ? 's' : ''}` : 'Aucun pont réussi'} avec ${plural(S.settings.target || 3, 'vie')}. Dernier pont : ${why.toLowerCase()}, il fallait rejoindre ${r.target ? r.target.name : ''}.` + (r.solution ? ` Chemin le plus court : ${solPath(r)}.` : '')
       : `${goodAnswers(f.count)} avec ${plural(S.settings.target || 3, 'vie')}.${missedLine(r)}`);
     $('#endExamples').hidden = true;
     $('#endScore').innerHTML = f.best != null && f.plays > 1

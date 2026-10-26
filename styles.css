@@ -84,7 +84,14 @@ input::placeholder { color: var(--dim); }
 .btn.big { --depth: 10px; --d: 10px; width: 100%; font-size: 30px; min-height: 68px; margin-top: 20px; }
 .btn.big:active { --d: 1px; transform: translateY(9px); }
 .btn.ghost { --edge: var(--red-edge); background-color: var(--red); color: var(--paper); text-shadow: 0 2px 0 #0000004d; }
-.btn.confirm { --edge: #b5c4a8; background-color: var(--paper); color: var(--red); box-shadow: 0 var(--d) 0 var(--edge), inset 0 0 0 3px var(--red), inset 0 -3px 0 #00000026; }
+.btn { position: relative; }
+/* Confirmation en deux appuis (« Je sèche », « Abandonner »…) : bouton orange vif, petit rebond, et une barre
+   qui se vide en 3 s pour montrer qu'il faut retoucher vite. */
+.btn.confirm { --edge: #9a3a14; background-color: #ff7a45; color: #2a0c00; text-shadow: none; animation: confirmIn .35s cubic-bezier(.3,1.6,.5,1); }
+.btn.confirm::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: #2a0c0059; transform-origin: left; animation: confirmTimer 3s linear forwards; }
+@keyframes confirmIn { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: none; } }
+@keyframes confirmTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .btn.confirm { animation: none; } }
 .btn.small-btn { font-size: 16px; min-height: 44px; width: 100%; margin-top: 12px; }
 .link { background: none; border: 0; color: var(--mute); text-decoration: underline; text-underline-offset: 3px; font-size: 14px; padding: 8px 0; }
 .link:hover { color: var(--paper); }
