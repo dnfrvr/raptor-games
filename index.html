@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1638">
-  <title>Roland Gamos</title>
-  <meta name="description" content="Enchaîne les featurings, vérifiés en direct sur Deezer. À deux, avec un lien.">
+  <meta name="theme-color" content="#0c2216">
+  <title>Raptor Games</title>
+  <meta name="description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -17,23 +17,44 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Roland Gamos">
+  <meta name="apple-mobile-web-app-title" content="Raptor Games">
 </head>
 <body>
+  <!-- Icônes Lucide (licence ISC), réutilisées avec <use>. Rex est en images (rex*.webp). -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+  <circle cx="12" cy="12" r="3" /></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" />
+  <circle cx="6" cy="12" r="3" />
+  <circle cx="18" cy="19" r="3" />
+  <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+  <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" /></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1" />
+  <rect x="6" y="4" width="4" height="16" rx="1" /></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+  <polyline points="16 17 21 12 16 7" />
+  <line x1="21" x2="9" y1="12" y2="12" /></symbol>
+  </svg>
   <!-- ACCUEIL -->
   <main id="home" class="screen">
     <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
     <header class="logo">
-      <h1><span>Roland</span><span class="o">Gamos</span></h1>
+      <img class="raptor logo-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
+      <h1><span>Raptor</span><span class="o">Games</span></h1>
       <p class="pitch" id="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
     </header>
 
     <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
-      <button type="button" class="chip" data-mode="feat" role="radio">Roland Gamos</button>
+      <button type="button" class="chip mode-main" data-mode="feat" role="radio"><span class="mode-name">Roland Gamos</span><span class="mode-sub">Le jeu des feats</span></button>
       <button type="button" class="chip" data-mode="bridge" role="radio">Le pont</button>
       <button type="button" class="chip" data-mode="blind" role="radio">Blind test</button>
       <button type="button" class="chip" data-mode="fans" role="radio">Plus ou moins</button>
-      <button type="button" class="chip wide" data-mode="timeline" role="radio">La frise</button>
+      <button type="button" class="chip" data-mode="timeline" role="radio">La frise</button>
     </div>
 
     <form id="homeForm" class="panel" autocomplete="off">
@@ -86,7 +107,7 @@
       <span class="roomtag">Partie <b id="lobbyCode">—</b></span>
       <button class="link" data-leave type="button">Quitter</button>
     </div>
-
+    <img class="raptor lobby-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
     <section class="invite" id="invite">
       <h2 class="lobby-title" id="lobbyTitle">Invite ton adversaire</h2>
       <button class="codebox" id="codeBox" type="button" aria-label="Copier le code du salon">
@@ -96,8 +117,8 @@
       </button>
       <p class="small" id="inviteUrl">—</p>
       <div class="invite-row">
-        <button class="btn" id="shareBtn" type="button">Partager</button>
-        <button class="btn ghost" id="copyBtn" type="button">Copier</button>
+        <button class="btn" id="shareBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg>Partager</button>
+        <button class="btn ghost" id="copyBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Copier</button>
       </div>
     </section>
 
@@ -146,7 +167,7 @@
       <div class="clock" id="clock" role="timer" aria-label="Temps restant"><span id="clockNum">∞</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"/></svg></div>
       <div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>
     </div>
-    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="quitBtn" type="button">Quitter</button><button class="gear" id="gearBtn" type="button" aria-label="Réglages" aria-expanded="false" aria-controls="gearMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.6 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button></span>
+    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="quitBtn" type="button">Quitter</button><button class="gear" id="gearBtn" type="button" aria-label="Réglages" aria-expanded="false" aria-controls="gearMenu"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></button></span>
       <div class="gear-menu" id="gearMenu" hidden>
         <button type="button" class="gear-row" id="sfxBtn" aria-pressed="true"><span>Effets sonores</span><span class="sw"></span></button>
         <button type="button" class="gear-row" id="muteBtn" aria-pressed="false"><span>Lecture auto des extraits</span><span class="sw"></span></button>
@@ -203,6 +224,7 @@
   <!-- FIN DE MANCHE : feuille en bas, la chaîne reste visible au-dessus -->
   <div class="sheet" id="endSheet" hidden role="dialog" aria-labelledby="endTitle">
     <div class="sheet-body">
+      <img class="raptor sheet-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
       <p class="small" id="endKicker"></p>
       <h2 id="endTitle"></h2>
       <p id="endText"></p>
@@ -229,10 +251,11 @@
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <div class="wake" id="wake" role="status" hidden><span class="spin"></span><span id="wakeText"></span></div>
+  <div class="wake" id="wake" role="status" hidden><img class="raptor wake-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async"><span id="wakeText"></span></div>
   <audio id="audio" preload="none"></audio>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/confetti.js" defer></script>
   <script src="/app.js?v=6"></script>
 </body>
 </html>

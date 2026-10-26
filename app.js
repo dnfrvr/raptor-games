@@ -5,6 +5,8 @@
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
+  const ico = (id, cls = 'ico') => `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const PLAY = ico('i-play'), PAUSE = ico('i-pause');
   const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
   const goodAnswers = (n) => `${n} bonne${n > 1 ? 's' : ''} réponse${n > 1 ? 's' : ''}`;
 
@@ -218,7 +220,7 @@
     if (!S) return show('home');
     if (S.phase === 'lobby') {
       show('lobby'); $('#endSheet').hidden = true; document.body.classList.remove('sheet-open');
-      document.title = 'Roland Gamos';
+      document.title = 'Raptor Games';
       return renderLobby();
     }
     show('game');
@@ -263,7 +265,7 @@
     $('#copyBtn').hidden = full || !isHost;
     $('#inviteUrl').hidden = full || !isHost;
     $('#shareBtn').onclick = async () => {
-      if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: { blind: 'Viens jouer au blind test contre moi', bridge: 'Viens jouer au Pont contre moi', fans: 'Viens jouer au Plus ou moins contre moi', timeline: 'Viens jouer à la Frise contre moi' }[S.mode] || 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
+      if (navigator.share) { try { await navigator.share({ title: 'Raptor Games', text: { blind: 'Viens jouer au blind test contre moi', bridge: 'Viens jouer au Pont contre moi', fans: 'Viens jouer au Plus ou moins contre moi', timeline: 'Viens jouer à la Frise contre moi' }[S.mode] || 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
       copy(url);
     };
     $('#copyBtn').onclick = () => copy(url);
@@ -462,7 +464,7 @@
         }, 80);
       }
     }
-    document.title = !playing ? 'Roland Gamos' : myTurn ? '● À toi | Roland Gamos' : `${turnName} joue | Roland Gamos`;
+    document.title = !playing ? 'Raptor Games' : myTurn ? '● À toi | Raptor Games' : `${turnName} joue | Raptor Games`;
 
     // --- Formulaire du joueur actif ---
     const soloPause = !!(r.solved || r.failed);
@@ -530,7 +532,7 @@
         const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">Rare</span>' : '') + (l.joker ? ' <span class="tag">Joker</span>' : '') + (l.relaunch ? ' <span class="tag">Relance</span>' : '');
         const detail = (i === 0 ? `<span class="by">${l.bridge ? 'départ' : `lancé par ${who}`}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
+      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les feats validés s'affichent ici.</li>`;
       bindTracks();
       lastChainLen = r.chain.length;
     }
@@ -635,7 +637,7 @@
     } else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
     else if (fans) banner.innerHTML = myTurn ? `À toi : <b>${esc(next.artist.name)}</b> a-t-il plus ou moins de fans que <b>${esc(prev.artist.name)}</b> ?` : `${esc(turnName)} réfléchit : plus ou moins que ${esc(prev.artist.name)} ?`;
     else banner.innerHTML = myTurn ? 'À toi : <b>où placer ce son</b> sur la frise ?' : `${esc(turnName)} place ce son sur la frise.`;
-    document.title = !playing ? 'Roland Gamos' : myTurn ? '● À toi | Roland Gamos' : `${turnName} joue | Roland Gamos`;
+    document.title = !playing ? 'Raptor Games' : myTurn ? '● À toi | Raptor Games' : `${turnName} joue | Raptor Games`;
 
     // --- Panneau ---
     const panel = $('#qzPanel');
@@ -757,7 +759,7 @@
       btStepKey = key;
       let html;
       if (r.step === 'reveal' && r.artist) html = `${avatar(r.artist)}<span class="nm">${esc(r.artist.name)}</span>`;
-      else if (r.step === 'guess') html = `<button type="button" class="bt-disc" id="btDisc" data-prev="${esc(r.track && r.track.preview || '')}" aria-label="Écouter l’extrait"><span>▶</span></button><span class="nm q">Qui chante ?</span>`;
+      else if (r.step === 'guess') html = `<button type="button" class="bt-disc" id="btDisc" data-prev="${esc(r.track && r.track.preview || '')}" aria-label="Écouter l’extrait"><span>${PLAY}</span></button><span class="nm q">Qui chante ?</span>`;
       else if (r.step === 'pick' && r.artist) html = `${avatar(r.artist)}<span class="nm">${esc(r.artist.name)}</span>`;
       else html = `<span class="av q" aria-hidden="true">♪</span><span class="nm q">${r.proposer === S.me ? 'À toi de choisir' : 'Choix du son'}</span>`;
       $('#current').innerHTML = html;
@@ -793,7 +795,7 @@
         ? (iGuess ? `À toi : <b>quel artiste chante ?</b><span class="bt-fast">Trouve en moins de ${S.fastSeconds} s : +1 joker</span>` : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
         : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b> : choisis un artiste.`)
           : `${esc(prop)} choisit un son pour ${esc(nameOf(r.guesser))}.`;
-    document.title = !playing ? 'Roland Gamos' : (iPropose || iGuess) ? '● À toi | Blind test' : 'Blind test | Roland Gamos';
+    document.title = !playing ? 'Raptor Games' : (iPropose || iGuess) ? '● À toi | Blind test' : 'Blind test | Raptor Games';
 
     // --- Formulaire ---
     const form = iGuess || (iPropose && r.step === 'propose');
@@ -880,7 +882,7 @@
             ? (r.options.length ? `Sons de ${esc(r.artist.name)} pour « ${esc(q)} » :` : `Aucun son de ${esc(r.artist.name)} trouvé pour « ${esc(q)} ». Essaie un autre titre.`)
             : `Ses sons les plus écoutés. Écoute, puis choisis. Ou tape un titre au-dessus.`;
         }
-        $('#btOpts').innerHTML = r.options.map((t) => `<li><button type="button" class="bt-opt" data-id="${t.id}"><b>${esc(t.title)}</b>${t.album ? `<span>${esc(t.album)}</span>` : ''}</button>${t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">▶</button>` : ''}</li>`).join('');
+        $('#btOpts').innerHTML = r.options.map((t) => `<li><button type="button" class="bt-opt" data-id="${t.id}"><b>${esc(t.title)}</b>${t.album ? `<span>${esc(t.album)}</span>` : ''}</button>${t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">${PLAY}</button>` : ''}</li>`).join('');
         $('#btOpts').querySelectorAll('.bt-opt').forEach((b) => (b.onclick = () => { audio.pause(); socket.emit('bt:pick', { id: Number(b.dataset.id) }); }));
         bindTracks();
       }
@@ -911,7 +913,7 @@
       $('#chain').innerHTML = log.length ? log.map((l) => {
         const pts = (l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>') + (l.fast ? ' <span class="tag">Rapide</span>' : '') + (l.extended ? ' <span class="tag">Joker</span>' : '');
         return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty">Les extraits joués s'affichent ici.</li>`;
+      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les extraits joués s'affichent ici.</li>`;
       bindTracks();
     }
 
@@ -1074,7 +1076,7 @@
   function hearts() {
     if (S.lives == null) return '';
     const max = Math.min(5, Math.max(1, S.settings.target || 3));
-    return `<span class="hearts" aria-label="${plural(S.lives, 'vie')} sur ${max}">${'<i class="on">♥</i>'.repeat(Math.max(0, S.lives))}${'<i>♥</i>'.repeat(Math.max(0, max - S.lives))}</span>`;
+    return `<span class="hearts" aria-label="${plural(S.lives, 'vie')} sur ${max}">${ico('i-heart', 'hrt on').repeat(Math.max(0, S.lives))}${ico('i-heart', 'hrt').repeat(Math.max(0, max - S.lives))}</span>`;
   }
   let lastLifeId = null;
   function lifeNotice() {
@@ -1157,7 +1159,7 @@
       ex.dataset.key = exKey;
       ex.hidden = !(r.examples && r.examples.length);
       if (!ex.hidden) {
-        ex.innerHTML = `<p>Il y avait par exemple :</p><ul>${r.examples.map((e) => `<li><div class="ex-txt"><b>${esc(e.artist.name)}</b><span>« ${esc(e.track.title)} »</span></div>${e.track.preview ? `<button type="button" class="play-btn" data-prev="${esc(e.track.preview)}" aria-label="Écouter « ${esc(e.track.title)} »">▶</button>` : ''}</li>`).join('')}</ul>`;
+        ex.innerHTML = `<p>Il y avait par exemple :</p><ul>${r.examples.map((e) => `<li><div class="ex-txt"><b>${esc(e.artist.name)}</b><span>« ${esc(e.track.title)} »</span></div>${e.track.preview ? `<button type="button" class="play-btn" data-prev="${esc(e.track.preview)}" aria-label="Écouter « ${esc(e.track.title)} »">${PLAY}</button>` : ''}</li>`).join('')}</ul>`;
         bindTracks();
       }
     }
@@ -1262,7 +1264,7 @@
   }
   function trackInline(t, hide = []) {
     const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
-    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">▶</button>` : '';
+    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">${PLAY}</button>` : '';
     return `<span class="ti">« ${masked(t.title, hide)} »</span>${btn}`;
   }
   function trackCard(t, byAppeal, hide = []) {
@@ -1271,7 +1273,7 @@
     const names = (t.artists || []).map((n) => (hide.includes(n) ? hid(n.length) : esc(n))).join(', ');
     const sub = byAppeal ? '<span class="badge">Validé à la main</span>' : `<span>${names}</span>`;
     const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
-    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">▶</button>` : '';
+    const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">${PLAY}</button>` : '';
     // Le lien Deezer montrerait tous les artistes : il n'apparaît qu'une fois la manche finie.
     const title = t.link && !hide.length ? `<a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.title)}</a>` : masked(t.title, hide);
     return `<div class="track">${cover}<div class="tt"><b>${title}</b>${sub}</div>${btn}</div>`;
@@ -1309,10 +1311,10 @@
   function syncPlayButtons() {
     document.querySelectorAll('.play-btn').forEach((b) => {
       const on = !audio.paused && audio.dataset.src === b.dataset.prev;
-      b.classList.toggle('on', on); b.textContent = on ? '❚❚' : '▶';
+      b.classList.toggle('on', on); b.innerHTML = on ? PAUSE : PLAY;
     });
     const d = document.getElementById('btDisc');
-    if (d) { const on = !audio.paused && audio.dataset.src === d.dataset.prev; d.classList.toggle('on', on); d.firstElementChild.textContent = on ? '❚❚' : '▶'; }
+    if (d) { const on = !audio.paused && audio.dataset.src === d.dataset.prev; d.classList.toggle('on', on); d.firstElementChild.innerHTML = on ? PAUSE : PLAY; }
   }
   ['play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, syncPlayButtons));
   // Interrupteurs du menu réglages (roue) : aria-pressed = activé.
@@ -1575,6 +1577,26 @@
   $('#jokerBtn').onclick = () => socket.emit('joker');
   $('#judgeYes').onclick = () => socket.emit('judge', { ok: true });
   $('#judgeNo').onclick = () => socket.emit('judge', { ok: false });
+
+  // ================= MASCOTTE ET CONFETTIS =================
+  // Le raptor de la feuille de fin change d'humeur : lunettes de soleil si tu gagnes, larme si tu perds.
+  // Victoire : pluie de confettis vert et jaune (canvas-confetti).
+  const sheetEl = $('#endSheet');
+  let sheetWas = '';
+  new MutationObserver(() => {
+    const open = !sheetEl.hidden, win = sheetEl.classList.contains('win');
+    const rex = sheetEl.querySelector('.sheet-raptor');
+    const src = win ? '/rex-win.webp' : '/rex-sad.webp';
+    if (rex && !rex.src.endsWith(src)) rex.src = src;
+    const key = open ? (win ? 'win' : 'lose') + (S ? S.roundNo + '-' + S.phase : '') : '';
+    if (open && win && key !== sheetWas && window.confetti && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const colors = ['#ffd21f', '#43b85c', '#f3f7e6', '#2fae4f'];
+      confetti({ particleCount: 90, spread: 75, origin: { y: 0.75 }, colors, disableForReducedMotion: true });
+      setTimeout(() => confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0, y: 0.8 }, colors }), 250);
+      setTimeout(() => confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1, y: 0.8 }, colors }), 400);
+    }
+    sheetWas = key;
+  }).observe(sheetEl, { attributes: true, attributeFilter: ['hidden', 'class'] });
 
   // ================= TOAST =================
   let toastT;

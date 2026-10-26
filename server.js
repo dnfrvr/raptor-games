@@ -41,6 +41,10 @@ const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VER
 app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
+// Rex, la mascotte (3 humeurs), et le motif de fond.
+for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp', 'jungle-bg.webp']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
+// Confettis de victoire (canvas-confetti 1.9.3, licence ISC), servis depuis le dépôt.
+app.get('/confetti.js', (_, res) => res.sendFile(path.join(__dirname, 'confetti.js'), { maxAge: '30d' }));
 // Icônes (onglet du navigateur, écran d'accueil iOS/Android) et fiche d'application installable.
 for (const f of ['favicon-32.png', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
 app.get('/favicon.ico', (_, res) => res.sendFile(path.join(__dirname, 'favicon-32.png'), { maxAge: '7d' }));
@@ -146,4 +150,4 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Roland Gamos ${VERSION} prêt sur http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Raptor Games ${VERSION} prêt sur http://localhost:${PORT}`));
