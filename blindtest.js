@@ -39,7 +39,7 @@ class BlindRoom extends Room {
     super(io, hostToken, hostName, solo);
     this.mode = 'blind';
     this.settings.turnSeconds = 30;
-    this.settings.target = 5;
+    this.settings.target = 10; // un tour peut rapporter 2 points : 10 pour une vraie partie
     this.log = [];        // extraits déjà joués (révélés)
     this.usedTracks = new Set();
   }
