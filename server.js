@@ -113,7 +113,11 @@ io.on('connection', (socket) => {
   socket.on('bt:search', act((d) => room.searchTrack && room.searchTrack(token, d.q)));
   socket.on('leave', () => {
     if (!room || !token) return;
-    if (room.leave(token)) { clearTimeout(room.timer); rooms.delete(room.code); }
+    // Solo : la partie contre le bot s'arrête. Sinon, quitter le salon libère la place (avant le lancement).
+    if (room.solo || room.leave(token)) {
+      for (const t of ['timer', 'botTimer', 'koTimer', 'revealTimer']) clearTimeout(room[t]);
+      rooms.delete(room.code);
+    }
     room = null; token = null;
   });
   // Tests uniquement (faux Deezer) : donner des jokers à un joueur.

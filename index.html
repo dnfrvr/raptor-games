@@ -51,7 +51,7 @@
 
     <ol class="rules" id="rulesBlind" aria-label="Règles du blind test" hidden>
       <li><span><b>Tu choisis un artiste et un de ses sons.</b> Ou tu laisses le hasard faire.</span></li>
-      <li><span><b>Le joueur suivant écoute l'extrait.</b> Il trouve l'artiste : +1 point. Le titre en plus : +1.</span></li>
+      <li><span><b>Le joueur suivant écoute 10 secondes d'extrait.</b> Il trouve l'artiste : +1 point. Le titre en plus : +1. Trouvé vite : +1 joker, pour écouter la suite d'un extrait plus tard.</span></li>
       <li><span><b>Puis c'est lui qui propose.</b> 3 essais par extrait. Le premier au score fixé gagne.</span></li>
     </ol>
     <ol class="rules" id="rulesFeat" aria-label="Règles">
@@ -120,7 +120,7 @@
       <div class="clock" id="clock" role="timer" aria-label="Temps restant"><span id="clockNum">∞</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"/></svg></div>
       <div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>
     </div>
-    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="sfxBtn" type="button" aria-pressed="true">Effets : oui</button><button class="link" id="muteBtn" type="button" aria-pressed="false">Lecture auto : non</button></span></div>
+    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="sfxBtn" type="button" aria-pressed="true">Effets : oui</button><button class="link" id="muteBtn" type="button" aria-pressed="false">Lecture auto : non</button><button class="link" id="quitBtn" type="button">Quitter</button></span></div>
 
     <section class="stage" aria-live="polite">
       <div class="current" id="current"></div>

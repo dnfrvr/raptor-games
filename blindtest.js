@@ -6,6 +6,10 @@ const { Room, TURN_CHOICES, FR_RAPPERS, BOT_TOKEN, MAX_TRIES, AFTER_MISS_MS } = 
 
 const REVEAL_MS = 7000;   // réponse affichée avant l'extrait suivant
 const OPTIONS = 8;        // sons proposés au joueur qui choisit
+// Écoute : par défaut, seulement les 10 premières secondes de l'extrait Deezer (qui en fait 30).
+// Joker de rapidité (artiste trouvé dans le premier quart du chrono) : plus tard, il débloque la suite de l'extrait.
+const FIRST_LISTEN_S = 10;
+const FAST_NO_CLOCK_MS = 8000; // seuil « rapide » quand la partie se joue sans chrono
 // Bot : temps de réflexion, chance de trouver l'artiste, puis le titre.
 const BOT = {
   easy:   { think: [6000, 10000], artist: 0.45, title: 0.25 },
@@ -70,7 +74,21 @@ class BlindRoom extends Room {
   nextPlayer(i) { return (i + 1) % this.players.length; }
   usedArtist() { return false; } // on peut reproposer un artiste (mais jamais le même son)
   // Rien de tout ça dans le blind test.
-  appeal() {} judge() {} grant() {} useJoker() {} koRelaunch() {} koGiveUp() {} checkKO() {}
+  appeal() {} judge() {} grant() {} koRelaunch() {} koGiveUp() {} checkKO() {}
+
+  // Joker : écouter la suite de l'extrait (de 10 s à 30 s). Un seul par extrait.
+  useJoker(token) {
+    const i = this.idx(token);
+    const r = this.round;
+    const p = this.players[i];
+    if (this.phase !== 'playing' || !r || r.step !== 'guess' || i !== r.guesser || r.extended || !p || !(p.jokers > 0)) return;
+    p.jokers--;
+    r.extended = true;
+    this.broadcast();
+    this.emitAll('extractMore', { id: r.id, preview: r.track.preview, from: FIRST_LISTEN_S });
+  }
+
+  fastLimit() { return this.settings.turnSeconds ? (this.settings.turnSeconds * 1000) / 4 : FAST_NO_CLOCK_MS; }
   choosing() { return false; }
 
   newExtract(proposer) {
@@ -138,6 +156,8 @@ class BlindRoom extends Room {
     r.track = t;
     this.usedTracks.add(t.id);
     r.step = 'guess';
+    r.guessAt = Date.now();
+    r.extended = false;
     r.turn = r.guesser;
     r.tries = 0;
     r.lastError = null;
@@ -243,10 +263,14 @@ class BlindRoom extends Room {
     const points = found ? 1 + (found.title ? 1 : 0) : 0;
     const g = this.players[r.guesser];
     g.score += points;
+    // Joker de rapidité : artiste trouvé dans le premier quart du chrono (pas pour le bot).
+    const ms = Date.now() - (r.guessAt || Date.now());
+    const fast = !!found && !g.bot && ms <= this.fastLimit();
+    if (fast) g.jokers = (g.jokers || 0) + 1;
     r.step = 'reveal';
     r.turn = -1;
-    r.result = { points, artist: !!found, title: !!(found && found.title), why: found ? 'found' : why || 'tries', song: found ? found.song : '' };
-    this.log.push({ proposer: r.proposer, guesser: r.guesser, artist: r.artist, track: r.track, points, title: r.result.title });
+    r.result = { points, artist: !!found, title: !!(found && found.title), why: found ? 'found' : why || 'tries', song: found ? found.song : '', fast, ms: found ? ms : null };
+    this.log.push({ proposer: r.proposer, guesser: r.guesser, artist: r.artist, track: r.track, points, title: r.result.title, fast, extended: !!r.extended, ms: found ? ms : null });
     const t = this.settings.target;
     if (g.score >= t) {
       this.phase = 'finished';
@@ -268,6 +292,9 @@ class BlindRoom extends Room {
         heard: mine.length,
         found: mine.filter((x) => x.points > 0).length,
         titles: mine.filter((x) => x.title).length,
+        fast: mine.filter((x) => x.fast).length,
+        jokers: mine.filter((x) => x.extended).length,
+        best: mine.filter((x) => x.ms != null).reduce((m, x) => (m == null || x.ms < m ? x.ms : m), null),
         stumped: L.filter((x) => x.proposer === i && x.points === 0).length,
       };
     });
@@ -283,18 +310,20 @@ class BlindRoom extends Room {
       code: this.code,
       solo: this.solo,
       maxPlayers: this.solo ? 2 : 8,
-      jokers: 0,
+      jokers: this.players[me] ? this.players[me].jokers || 0 : 0,
+      fastSeconds: Math.round(this.fastLimit() / 1000),
+      listenSeconds: FIRST_LISTEN_S,
       me,
       host: this.idx(this.hostToken),
       phase: this.phase,
       final: this.final,
       settings: this.settings,
       roundNo: this.roundNo,
-      players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
+      players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: r && {
         id: r.id, step: r.step, proposer: r.proposer, guesser: r.guesser, turn: r.turn,
         tries: r.tries, maxTries: r.maxTries, lastError: r.lastError, checking: secret && r.checking ? { hidden: true } : r.checking,
-        result: r.result, out: [],
+        result: r.result, out: [], extended: !!r.extended,
         artist: secret ? null : r.artist,
         options: me === r.proposer && r.step === 'pick' ? r.options : [],
         query: me === r.proposer ? r.query || '' : '',

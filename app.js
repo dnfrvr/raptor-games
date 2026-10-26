@@ -184,11 +184,13 @@
 
   // Quitter : dans le salon (avant le lancement), on libère vraiment sa place côté serveur.
   const leaveRoom = () => {
-    if (S && S.phase === 'lobby') socket.emit('leave');
+    if (S && (S.phase === 'lobby' || S.solo)) socket.emit('leave'); // en solo, la partie contre le bot est fermée
     store.set('rg_room', '');
     setTimeout(() => { location.href = '/'; }, 120);
   };
   document.querySelectorAll('[data-leave]').forEach((b) => b.addEventListener('click', leaveRoom));
+  // Quitter en pleine partie (en haut de l'écran de jeu), avec confirmation en deux appuis.
+  setTimeout(() => armTwoTap($('#quitBtn'), 'Quitter', 'Sûr ?', leaveRoom), 0);
 
   // ================= ÉTAT =================
   socket.on('state', (st) => {
@@ -549,7 +551,9 @@
       const i = Number(el.dataset.p);
       const p = S.players[i] || { name: '—', score: 0, online: false };
       el.querySelector('.pname').textContent = p.name;
-      el.querySelector('.pj').textContent = '';
+      const pj = el.querySelector('.pj');
+      pj.textContent = `🃏 ${p.jokers || 0}`;
+      pj.classList.toggle('zero', !p.jokers);
       el.querySelector('.pscore').textContent = p.score;
       el.classList.toggle('active', actor === i);
       el.classList.toggle('off', !p.online);
@@ -558,7 +562,6 @@
     });
     $('#roundLabel').textContent = `Extrait ${S.roundNo}, premier à ${plural(S.settings.target, 'point')}`;
     $('#muteBtn').hidden = true;
-    $('#jokerBtn').hidden = true;
     $('#judgeOverlay').hidden = true;
     $('#ko').hidden = true;
     if (!r) return;
@@ -592,7 +595,8 @@
       syncPlayButtons();
       disc.onclick = () => {
         if (!r.track || !r.track.preview) return;
-        if (!audio.paused && audio.dataset.src === r.track.preview) audio.pause(); else playPreview(r.track.preview, true);
+        if (!audio.paused && audio.dataset.src === r.track.preview) audio.pause();
+        else playPreview(r.track.preview, true, { limit: r.extended ? 0 : S.listenSeconds || 10 });
       };
     }
     $('#proof').hidden = true;
@@ -603,10 +607,10 @@
     const res = r.result;
     banner.className = 'turn ' + (iPropose || iGuess ? 'me' : 'them');
     banner.innerHTML = r.step === 'reveal'
-      ? (res && res.points ? `${r.guesser === S.me ? 'Tu trouves' : esc(gues) + ' trouve'} ${res.title ? 'l’artiste et le titre' : 'l’artiste'} : <b>+${res.points}</b>`
+      ? (res && res.points ? `${r.guesser === S.me ? 'Tu trouves' : esc(gues) + ' trouve'} ${res.title ? 'l’artiste et le titre' : 'l’artiste'} : <b>+${res.points}</b>${res.ms != null ? ` en ${(res.ms / 1000).toFixed(1).replace('.', ',')} s` : ''}${res.fast ? ' et un joker 🃏' : ''}`
         : res && res.why === 'timeout' ? 'Temps écoulé : personne ne marque.' : res && res.why === 'pass' ? `${r.guesser === S.me ? 'Tu passes' : esc(gues) + ' passe'} : personne ne marque.` : 'Raté : personne ne marque.')
       : r.step === 'guess'
-        ? (iGuess ? 'À toi : <b>quel artiste chante ?</b>' : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
+        ? (iGuess ? `À toi : <b>quel artiste chante ?</b><span class="bt-fast">Trouve en moins de ${S.fastSeconds} s : +1 joker</span>` : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
         : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b> : choisis un artiste.`)
           : `${esc(prop)} choisit un son pour ${esc(nameOf(r.guesser))}.`;
     document.title = !playing ? 'Roland Gamos' : (iPropose || iGuess) ? '● À toi | Blind test' : 'Blind test | Roland Gamos';
@@ -614,6 +618,7 @@
     // --- Formulaire ---
     const form = iGuess || (iPropose && r.step === 'propose');
     $('#playForm').hidden = !form;
+    if (!form) $('#jokerBtn').hidden = true;
     if (form) {
       const busy = !!r.checking;
       $('#songInput').hidden = !iGuess;
@@ -627,6 +632,11 @@
       $('#artistInput').disabled = busy || out; $('#songInput').disabled = busy || out;
       $('#submitBtn').disabled = busy || out; $('#giveupBtn').disabled = busy; $('#randomBtn').disabled = busy;
       if (btGiveKey !== key) { btGiveKey = key; armTwoTap($('#giveupBtn'), 'Je passe', 'Sûr ?', () => socket.emit('giveup')); }
+      // Joker : écouter la suite de l'extrait (après les premières secondes).
+      $('#jokerBtn').hidden = !iGuess || r.extended || !(S.jokers > 0);
+      $('#jokerBtn').textContent = 'Joker : écouter la suite';
+      $('#jokerBtn').setAttribute('aria-label', `Joker : écouter la suite de l’extrait (${S.jokers} restant${S.jokers > 1 ? 's' : ''})`);
+      $('#jokerBtn').disabled = busy;
       const fb = $('#feedback');
       if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Chargement des sons${r.checking.artist ? ` de ${esc(r.checking.artist.name)}` : ''}…`; }
       else if (r.lastError) {
@@ -717,7 +727,7 @@
       btLogLen = log.length;
       $('#chainTitle').textContent = log.length ? `Les extraits, ${log.length}` : 'Les extraits';
       $('#chain').innerHTML = log.length ? log.map((l) => {
-        const pts = l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>';
+        const pts = (l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>') + (l.fast ? ' <span class="tag">Rapide</span>' : '') + (l.extended ? ' <span class="tag">Joker</span>' : '');
         return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les extraits joués s'affichent ici.</li>`;
       bindTracks();
@@ -726,7 +736,8 @@
     // Sons : bonne réponse, raté.
     const rk = r.step === 'reveal' ? `${r.id}-${res ? res.points : 0}` : r.lastError ? `${r.id}-miss-${r.tries}` : '';
     if (rk && rk !== btResultKey && btResultKey !== '') {
-      if (r.step === 'reveal') (res && res.points ? sfx.ding : sfx.out)(); else if (r.lastError.why === 'wrong') sfx.buzz();
+      if (r.step === 'reveal') { (res && res.points ? sfx.ding : sfx.out)(); if (res && res.fast) setTimeout(() => sfx.bonus(), 250); }
+      else if (r.lastError.why === 'wrong') sfx.buzz();
     }
     btResultKey = rk || btResultKey || 'init';
 
@@ -757,7 +768,8 @@
     $('#stopBtn').hidden = true;
     if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if (w === S.me) sfx.win(); else sfx.out(); }
   }
-  socket.on('extract', ({ preview }) => { if (S && S.mode === 'blind' && preview) playPreview(preview, true); });
+  socket.on('extract', ({ preview }) => { if (S && S.mode === 'blind' && preview) playPreview(preview, true, { limit: S.listenSeconds || 10 }); });
+  socket.on('extractMore', ({ preview, from }) => { if (S && S.mode === 'blind' && preview) playPreview(preview, true, { from }); });
 
   function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
@@ -947,6 +959,9 @@
         if (!p) return '';
         const bits = [`${st.found} trouvé${st.found > 1 ? 's' : ''} sur ${st.heard}`];
         if (st.titles) bits.push(`${st.titles} titre${st.titles > 1 ? 's' : ''}`);
+        if (st.fast) bits.push(`${st.fast} rapide${st.fast > 1 ? 's' : ''}`);
+        if (st.jokers) bits.push(`${st.jokers} joker${st.jokers > 1 ? 's' : ''} joué${st.jokers > 1 ? 's' : ''}`);
+        if (st.best != null) bits.push(`record ${(st.best / 1000).toFixed(1).replace('.', ',')} s`);
         if (st.stumped) bits.push(`${st.stumped} colle${st.stumped > 1 ? 's' : ''} posée${st.stumped > 1 ? 's' : ''}`);
         return `<li class="recap-p p${i}${i === S.me ? ' me' : ''}"><span class="recap-name">${esc(p.name)}</span><span class="recap-stats">${bits.join(' · ')}</span></li>`;
       }).join('')}</ul>`;
@@ -1037,11 +1052,19 @@
     audioUnlocked = true;
     try { audio.muted = true; audio.play().catch(() => {}).finally(() => { audio.pause(); audio.muted = false; }); } catch {}
   }
-  function playPreview(src, force) {
+  // limit : arrêt automatique à cette seconde (blind test : première écoute limitée) ; from : départ plus loin.
+  function playPreview(src, force, { limit = 0, from = 0 } = {}) {
     if (!src || (muted && !force)) return;
-    audio.src = src; audio.dataset.src = src; audio.currentTime = 0;
-    audio.play().catch(() => {});
+    if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
+    audio.dataset.limit = limit ? String(limit) : '';
+    const go = () => { try { audio.currentTime = from; } catch {} audio.play().catch(() => {}); };
+    if (audio.readyState >= 1) go(); else audio.addEventListener('loadedmetadata', go, { once: true });
+    if (audio.readyState < 1) audio.play().catch(() => {});
   }
+  audio.addEventListener('timeupdate', () => {
+    const lim = Number(audio.dataset.limit || 0);
+    if (lim && audio.currentTime >= lim) { audio.pause(); audio.dataset.limit = ''; }
+  });
   function syncPlayButtons() {
     document.querySelectorAll('.play-btn').forEach((b) => {
       const on = !audio.paused && audio.dataset.src === b.dataset.prev;

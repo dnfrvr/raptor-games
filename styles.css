@@ -539,4 +539,10 @@ body.ko-open .reacts { visibility: hidden; }
 .bt-opt span { font-size: 13px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-next { color: var(--dim); }
 #btSearch { width: 100%; }
+.bt-fast { display: block; margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--mute); }
+/* Ligne sous le score : la manche, puis les réglages et « Quitter » sur une ligne qui ne se coupe pas */
+.roundline { flex-wrap: wrap; row-gap: 4px; column-gap: 12px; }
+.roundline .toggles { display: flex; gap: 14px; margin-left: auto; white-space: nowrap; }
+.roundline .toggles .link { padding: 6px 0; }
+#quitBtn.confirm { color: var(--yellow); }
 
