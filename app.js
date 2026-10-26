@@ -532,7 +532,7 @@
         const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">Rare</span>' : '') + (l.joker ? ' <span class="tag">Joker</span>' : '') + (l.relaunch ? ' <span class="tag">Relance</span>' : '');
         const detail = (i === 0 ? `<span class="by">${l.bridge ? 'départ' : `lancé par ${who}`}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty">${ico('i-raptor', 'raptor mini')}Les feats validés s'affichent ici.</li>`;
+      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les feats validés s'affichent ici.</li>`;
       bindTracks();
       lastChainLen = r.chain.length;
     }
@@ -913,7 +913,7 @@
       $('#chain').innerHTML = log.length ? log.map((l) => {
         const pts = (l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>') + (l.fast ? ' <span class="tag">Rapide</span>' : '') + (l.extended ? ' <span class="tag">Joker</span>' : '');
         return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty">${ico('i-raptor', 'raptor mini')}Les extraits joués s'affichent ici.</li>`;
+      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les extraits joués s'affichent ici.</li>`;
       bindTracks();
     }
 
@@ -1585,8 +1585,9 @@
   let sheetWas = '';
   new MutationObserver(() => {
     const open = !sheetEl.hidden, win = sheetEl.classList.contains('win');
-    const use = sheetEl.querySelector('.sheet-raptor use');
-    if (use) use.setAttribute('href', win ? '#i-raptor-cool' : '#i-raptor-sad');
+    const rex = sheetEl.querySelector('.sheet-raptor');
+    const src = win ? '/rex-win.webp' : '/rex-sad.webp';
+    if (rex && !rex.src.endsWith(src)) rex.src = src;
     const key = open ? (win ? 'win' : 'lose') + (S ? S.roundNo + '-' + S.phase : '') : '';
     if (open && win && key !== sheetWas && window.confetti && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const colors = ['#ffd21f', '#43b85c', '#f3f7e6', '#2fae4f'];

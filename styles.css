@@ -633,7 +633,7 @@ body {
 /* Rex, la mascotte */
 .raptor { display: block; overflow: visible; }
 .logo { position: relative; }
-.logo-raptor { width: 148px; height: 148px; margin: -6px auto -18px; filter: drop-shadow(0 8px 0 #06120966); animation: rexIn .7s cubic-bezier(.2,1.6,.4,1) both, rexBob 3.2s ease-in-out .8s infinite; transform-origin: 50% 100%; }
+.logo-raptor { width: 168px; height: 168px; margin: -6px auto -10px; filter: drop-shadow(0 8px 0 #06120966); animation: rexIn .7s cubic-bezier(.2,1.6,.4,1) both, rexBob 3.2s ease-in-out .8s infinite; transform-origin: 50% 100%; }
 @keyframes rexIn { from { transform: translateY(40px) scale(.3); opacity: 0; } }
 @keyframes rexBob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-2deg); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(-3px) rotate(2deg); } }
 .leaf { position: absolute; width: 96px; height: 96px; top: 10px; opacity: .95; filter: drop-shadow(0 6px 0 #06120980); pointer-events: none; }

@@ -41,6 +41,8 @@ const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VER
 app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
+// Rex, la mascotte (3 humeurs).
+for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
 // Confettis de victoire (canvas-confetti 1.9.3, licence ISC), servis depuis le dépôt.
 app.get('/confetti.js', (_, res) => res.sendFile(path.join(__dirname, 'confetti.js'), { maxAge: '30d' }));
 // Icônes (onglet du navigateur, écran d'accueil iOS/Android) et fiche d'application installable.
