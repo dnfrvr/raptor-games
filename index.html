@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1638">
-  <title>Roland Gamos</title>
-  <meta name="description" content="Enchaîne les featurings, vérifiés en direct sur Deezer. À deux, avec un lien.">
+  <meta name="theme-color" content="#0c2216">
+  <title>Raptor Games</title>
+  <meta name="description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -17,23 +17,244 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Roland Gamos">
+  <meta name="apple-mobile-web-app-title" content="Raptor Games">
 </head>
 <body>
+  <!-- Mascotte « Rex » (dessin original : casquette, chaîne, micro) et feuilles ; icônes Lucide (licence ISC). Réutilisés avec <use>. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+    <linearGradient id="rx-skin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fd17a"/><stop offset="1" stop-color="#2fa04c"/></linearGradient>
+    <linearGradient id="rx-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a1"/><stop offset=".45" stop-color="#ffd21f"/><stop offset="1" stop-color="#c98f00"/></linearGradient>
+    <radialGradient id="rx-cheek"><stop offset="0" stop-color="#ff8fa3" stop-opacity=".75"/><stop offset="1" stop-color="#ff8fa3" stop-opacity="0"/></radialGradient>
+  </defs>
+    <symbol id="i-raptor" viewBox="0 0 160 160"><g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- queue -->
+    <path d="M52 112 C34 112 20 104 10 88 C22 96 36 98 50 96 Z" fill="url(#rx-skin)"/>
+    <path d="M12 90 L2 84 L10 92 L0 94 L12 96 Z" fill="#ffd21f" stroke-width="2.5"/>
+    <!-- pieds -->
+    <path d="M58 132 C56 142 60 148 70 148 L80 148 C82 142 78 136 74 132 Z" fill="#2f9a49"/>
+    <path d="M88 132 C86 142 90 148 100 148 L110 148 C112 142 108 136 104 132 Z" fill="#2f9a49"/>
+    <!-- corps -->
+    <path d="M50 108 C48 88 62 76 80 76 C100 76 112 90 110 110 C108 128 96 138 80 138 C62 138 52 126 50 108 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- ventre -->
+  <path d="M68 104 C68 94 74 88 82 88 C92 88 98 96 97 106 C96 120 90 128 82 128 C73 128 68 118 68 104 Z" fill="#e9f8c9"/>
+  <path d="M72 100 L92 100 M71 110 L95 110 M73 120 L92 120" stroke="#c6e6a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- griffes -->
+  <path d="M72 148 L74 142 L77 148 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.6" stroke-linejoin="round"/><path d="M93 140 C88 140 86 136 88 132 C90 135 92 137 96 137 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.8" stroke-linejoin="round"/>
+  <!-- chaîne en or + médaillon -->
+  <path d="M60 84 C68 96 92 98 102 84" fill="none" stroke="url(#rx-gold)" stroke-width="5" stroke-dasharray="5 2.5" stroke-linecap="round"/>
+  <g stroke="#0b2a17" stroke-width="2.5">
+    <circle cx="82" cy="98" r="9" fill="url(#rx-gold)"/>
+  </g>
+  <text x="82" y="102.5" text-anchor="middle" font-family="Lilita One, Arial Black, sans-serif" font-size="12" fill="#6b4a00">R</text>
+  <!-- tête -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M44 56 C42 34 60 20 84 20 C110 20 128 32 128 52 C128 72 112 84 86 84 C62 84 46 76 44 56 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- rayures sur le crâne -->
+  <path d="M56 34 L62 40 M66 27 L71 34" stroke="#2f9a49" stroke-width="4" stroke-linecap="round"/>
+  <!-- joues -->
+  <ellipse cx="66" cy="66" rx="9" ry="6" fill="url(#rx-cheek)"/>
+  <ellipse cx="114" cy="64" rx="8" ry="5.5" fill="url(#rx-cheek)"/>
+  <!-- yeux -->
+  <g stroke="#0b2a17" stroke-width="3">
+    <ellipse cx="78" cy="50" rx="11" ry="12.5" fill="#fff"/>
+    <ellipse cx="104" cy="49" rx="10" ry="11.5" fill="#fff"/>
+  </g>
+  <ellipse cx="80" cy="52" rx="7" ry="8.5" fill="#0b2a17"/>
+  <ellipse cx="106" cy="51" rx="6.5" ry="8" fill="#0b2a17"/>
+  <circle cx="83" cy="48" r="2.8" fill="#fff"/><circle cx="78" cy="56" r="1.3" fill="#fff"/>
+  <circle cx="108.5" cy="47" r="2.6" fill="#fff"/><circle cx="104" cy="55" r="1.2" fill="#fff"/>
+  <!-- narines + sourire avec petit croc -->
+  <path d="M116 38 l1.5 2 M122 39 l1 2" stroke="#0b2a17" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M84 70 C90 76 100 76 106 69" fill="none" stroke="#0b2a17" stroke-width="3" stroke-linecap="round"/>
+  <path d="M97 73.4 L99 78 L101 72.8 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.4" stroke-linejoin="round"/>
+  <!-- casquette à l'envers -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M52 30 C54 14 70 6 88 8 C104 10 114 18 114 28 C96 22 70 22 52 30 Z" fill="#ffd21f"/>
+    <path d="M54 29 C44 30 34 34 28 40 C40 40 50 37 58 33 Z" fill="#f2b900"/>
+  </g>
+  <path d="M76 9 C84 10 90 14 92 22" fill="none" stroke="#fff3b0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="86" cy="9" r="2.6" fill="#f2b900" stroke="#0b2a17" stroke-width="2"/>
+  <!-- bras avec micro -->
+  <g stroke="#0b2a17" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke="#2f9a49" stroke-width="8"/>
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke-width="0"/>
+    <rect x="117" y="62" width="9" height="20" rx="3" fill="#2b2b2b" transform="rotate(18 121 72)"/>
+    <circle cx="126" cy="58" r="8" fill="#5a5a5a"/>
+  </g>
+  <path d="M121 55 L131 55 M120 59 L132 59 M121 63 L131 63" stroke="#8d8d8d" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#2f9a49" stroke-width="8" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#0b2a17" stroke-width="2" stroke-linecap="round" opacity=".0"/></symbol>
+    <symbol id="i-raptor-sad" viewBox="0 0 160 160"><g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- queue -->
+    <path d="M52 112 C34 112 20 104 10 88 C22 96 36 98 50 96 Z" fill="url(#rx-skin)"/>
+    <path d="M12 90 L2 84 L10 92 L0 94 L12 96 Z" fill="#ffd21f" stroke-width="2.5"/>
+    <!-- pieds -->
+    <path d="M58 132 C56 142 60 148 70 148 L80 148 C82 142 78 136 74 132 Z" fill="#2f9a49"/>
+    <path d="M88 132 C86 142 90 148 100 148 L110 148 C112 142 108 136 104 132 Z" fill="#2f9a49"/>
+    <!-- corps -->
+    <path d="M50 108 C48 88 62 76 80 76 C100 76 112 90 110 110 C108 128 96 138 80 138 C62 138 52 126 50 108 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- ventre -->
+  <path d="M68 104 C68 94 74 88 82 88 C92 88 98 96 97 106 C96 120 90 128 82 128 C73 128 68 118 68 104 Z" fill="#e9f8c9"/>
+  <path d="M72 100 L92 100 M71 110 L95 110 M73 120 L92 120" stroke="#c6e6a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- griffes -->
+  <path d="M72 148 L74 142 L77 148 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.6" stroke-linejoin="round"/><path d="M93 140 C88 140 86 136 88 132 C90 135 92 137 96 137 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.8" stroke-linejoin="round"/>
+  <!-- chaîne en or + médaillon -->
+  <path d="M60 84 C68 96 92 98 102 84" fill="none" stroke="url(#rx-gold)" stroke-width="5" stroke-dasharray="5 2.5" stroke-linecap="round"/>
+  <g stroke="#0b2a17" stroke-width="2.5">
+    <circle cx="82" cy="98" r="9" fill="url(#rx-gold)"/>
+  </g>
+  <text x="82" y="102.5" text-anchor="middle" font-family="Lilita One, Arial Black, sans-serif" font-size="12" fill="#6b4a00">R</text>
+  <!-- tête -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M44 56 C42 34 60 20 84 20 C110 20 128 32 128 52 C128 72 112 84 86 84 C62 84 46 76 44 56 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- rayures sur le crâne -->
+  <path d="M56 34 L62 40 M66 27 L71 34" stroke="#2f9a49" stroke-width="4" stroke-linecap="round"/>
+  <!-- joues -->
+  <ellipse cx="66" cy="66" rx="9" ry="6" fill="url(#rx-cheek)"/>
+  <ellipse cx="114" cy="64" rx="8" ry="5.5" fill="url(#rx-cheek)"/>
+  <!-- yeux -->
+  <g stroke="#0b2a17" stroke-width="3">
+    <ellipse cx="78" cy="50" rx="11" ry="12.5" fill="#fff"/>
+    <ellipse cx="104" cy="49" rx="10" ry="11.5" fill="#fff"/>
+  </g>
+  <ellipse cx="80" cy="52" rx="7" ry="8.5" fill="#0b2a17"/>
+  <ellipse cx="106" cy="51" rx="6.5" ry="8" fill="#0b2a17"/>
+  <circle cx="83" cy="48" r="2.8" fill="#fff"/><circle cx="78" cy="56" r="1.3" fill="#fff"/>
+  <circle cx="108.5" cy="47" r="2.6" fill="#fff"/><circle cx="104" cy="55" r="1.2" fill="#fff"/>
+  <path d="M66 44 C68 36 88 36 90 44 Z" fill="#46bf63" stroke="#0b2a17" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M93 43 C95 35 113 35 115 43 Z" fill="#46bf63" stroke="#0b2a17" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M70 62 C68 66 68 69 70 70 C72 69 72 66 70 62 Z" fill="#8fd3ff" stroke="#0b2a17" stroke-width="1.5"/>
+  <!-- narines + sourire avec petit croc -->
+  <path d="M116 38 l1.5 2 M122 39 l1 2" stroke="#0b2a17" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M86 75 C92 70 100 70 105 74" fill="none" stroke="#0b2a17" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- casquette à l'envers -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M52 30 C54 14 70 6 88 8 C104 10 114 18 114 28 C96 22 70 22 52 30 Z" fill="#ffd21f"/>
+    <path d="M54 29 C44 30 34 34 28 40 C40 40 50 37 58 33 Z" fill="#f2b900"/>
+  </g>
+  <path d="M76 9 C84 10 90 14 92 22" fill="none" stroke="#fff3b0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="86" cy="9" r="2.6" fill="#f2b900" stroke="#0b2a17" stroke-width="2"/>
+  <!-- bras avec micro -->
+  <g stroke="#0b2a17" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke="#2f9a49" stroke-width="8"/>
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke-width="0"/>
+    <rect x="117" y="62" width="9" height="20" rx="3" fill="#2b2b2b" transform="rotate(18 121 72)"/>
+    <circle cx="126" cy="58" r="8" fill="#5a5a5a"/>
+  </g>
+  <path d="M121 55 L131 55 M120 59 L132 59 M121 63 L131 63" stroke="#8d8d8d" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#2f9a49" stroke-width="8" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#0b2a17" stroke-width="2" stroke-linecap="round" opacity=".0"/></symbol>
+    <symbol id="i-raptor-cool" viewBox="0 0 160 160"><g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- queue -->
+    <path d="M52 112 C34 112 20 104 10 88 C22 96 36 98 50 96 Z" fill="url(#rx-skin)"/>
+    <path d="M12 90 L2 84 L10 92 L0 94 L12 96 Z" fill="#ffd21f" stroke-width="2.5"/>
+    <!-- pieds -->
+    <path d="M58 132 C56 142 60 148 70 148 L80 148 C82 142 78 136 74 132 Z" fill="#2f9a49"/>
+    <path d="M88 132 C86 142 90 148 100 148 L110 148 C112 142 108 136 104 132 Z" fill="#2f9a49"/>
+    <!-- corps -->
+    <path d="M50 108 C48 88 62 76 80 76 C100 76 112 90 110 110 C108 128 96 138 80 138 C62 138 52 126 50 108 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- ventre -->
+  <path d="M68 104 C68 94 74 88 82 88 C92 88 98 96 97 106 C96 120 90 128 82 128 C73 128 68 118 68 104 Z" fill="#e9f8c9"/>
+  <path d="M72 100 L92 100 M71 110 L95 110 M73 120 L92 120" stroke="#c6e6a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- griffes -->
+  <path d="M72 148 L74 142 L77 148 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.6" stroke-linejoin="round"/><path d="M93 140 C88 140 86 136 88 132 C90 135 92 137 96 137 Z" fill="#fff" stroke="#0b2a17" stroke-width="1.8" stroke-linejoin="round"/>
+  <!-- chaîne en or + médaillon -->
+  <path d="M60 84 C68 96 92 98 102 84" fill="none" stroke="url(#rx-gold)" stroke-width="5" stroke-dasharray="5 2.5" stroke-linecap="round"/>
+  <g stroke="#0b2a17" stroke-width="2.5">
+    <circle cx="82" cy="98" r="9" fill="url(#rx-gold)"/>
+  </g>
+  <text x="82" y="102.5" text-anchor="middle" font-family="Lilita One, Arial Black, sans-serif" font-size="12" fill="#6b4a00">R</text>
+  <!-- tête -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M44 56 C42 34 60 20 84 20 C110 20 128 32 128 52 C128 72 112 84 86 84 C62 84 46 76 44 56 Z" fill="url(#rx-skin)"/>
+  </g>
+  <!-- rayures sur le crâne -->
+  <path d="M56 34 L62 40 M66 27 L71 34" stroke="#2f9a49" stroke-width="4" stroke-linecap="round"/>
+  <!-- joues -->
+  <ellipse cx="66" cy="66" rx="9" ry="6" fill="url(#rx-cheek)"/>
+  <ellipse cx="114" cy="64" rx="8" ry="5.5" fill="url(#rx-cheek)"/>
+  <!-- yeux -->
+  <g stroke="#0b2a17" stroke-width="3">
+    <ellipse cx="78" cy="50" rx="11" ry="12.5" fill="#fff"/>
+    <ellipse cx="104" cy="49" rx="10" ry="11.5" fill="#fff"/>
+  </g>
+  <ellipse cx="80" cy="52" rx="7" ry="8.5" fill="#0b2a17"/>
+  <ellipse cx="106" cy="51" rx="6.5" ry="8" fill="#0b2a17"/>
+  <circle cx="83" cy="48" r="2.8" fill="#fff"/><circle cx="78" cy="56" r="1.3" fill="#fff"/>
+  <circle cx="108.5" cy="47" r="2.6" fill="#fff"/><circle cx="104" cy="55" r="1.2" fill="#fff"/>
+  <g stroke="#0b2a17" stroke-width="3" stroke-linejoin="round">
+    <path d="M64 42 L92 42 L90 56 C88 62 70 62 67 56 Z" fill="#111"/>
+    <path d="M94 42 L120 41 L118 55 C116 61 100 61 97 55 Z" fill="#111"/>
+    <path d="M90 45 L96 45" fill="none"/>
+  </g>
+  <path d="M70 46 L78 46 M99 45 L106 45" stroke="#7af08f" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>
+  <!-- narines + sourire avec petit croc -->
+  <path d="M116 38 l1.5 2 M122 39 l1 2" stroke="#0b2a17" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M82 68 C90 80 102 80 108 67 Z" fill="#0b2a17" stroke="#0b2a17" stroke-width="3" stroke-linejoin="round"/><path d="M90 73 C95 77 100 77 104 72" fill="none" stroke="#ff8fa3" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- casquette à l'envers -->
+  <g stroke="#0b2a17" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M52 30 C54 14 70 6 88 8 C104 10 114 18 114 28 C96 22 70 22 52 30 Z" fill="#ffd21f"/>
+    <path d="M54 29 C44 30 34 34 28 40 C40 40 50 37 58 33 Z" fill="#f2b900"/>
+  </g>
+  <path d="M76 9 C84 10 90 14 92 22" fill="none" stroke="#fff3b0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="86" cy="9" r="2.6" fill="#f2b900" stroke="#0b2a17" stroke-width="2"/>
+  <!-- bras avec micro -->
+  <g stroke="#0b2a17" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke="#2f9a49" stroke-width="8"/>
+    <path d="M104 96 C114 96 120 90 122 82" fill="none" stroke-width="0"/>
+    <rect x="117" y="62" width="9" height="20" rx="3" fill="#2b2b2b" transform="rotate(18 121 72)"/>
+    <circle cx="126" cy="58" r="8" fill="#5a5a5a"/>
+  </g>
+  <path d="M121 55 L131 55 M120 59 L132 59 M121 63 L131 63" stroke="#8d8d8d" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#2f9a49" stroke-width="8" stroke-linecap="round"/>
+  <path d="M60 98 C54 100 52 106 54 110" fill="none" stroke="#0b2a17" stroke-width="2" stroke-linecap="round" opacity=".0"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 100 100"><path d="M50 96 C46 80 20 74 14 52 C8 30 24 10 50 4 C76 10 92 30 86 52 C80 74 54 80 50 96 Z" fill="#2f9a49"/>
+  <path d="M50 92 L50 10" stroke="#1b5e31" stroke-width="3" stroke-linecap="round"/>
+  <path d="M50 30 L30 20 M50 46 L24 38 M50 62 L30 58 M50 30 L70 20 M50 46 L76 38 M50 62 L70 58" stroke="#1b5e31" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M14 52 L28 50 M86 52 L72 50 M20 30 L32 34 M80 30 L68 34" stroke="#0c2216" stroke-width="4" stroke-linecap="round"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+  <circle cx="12" cy="12" r="3" /></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" />
+  <circle cx="6" cy="12" r="3" />
+  <circle cx="18" cy="19" r="3" />
+  <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+  <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" /></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1" />
+  <rect x="6" y="4" width="4" height="16" rx="1" /></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+  <polyline points="16 17 21 12 16 7" />
+  <line x1="21" x2="9" y1="12" y2="12" /></symbol>
+  </svg>
   <!-- ACCUEIL -->
   <main id="home" class="screen">
     <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
     <header class="logo">
-      <h1><span>Roland</span><span class="o">Gamos</span></h1>
+      <svg class="leaf leaf-l" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-leaf"/></svg>
+      <svg class="leaf leaf-r" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-leaf"/></svg>
+      <svg class="raptor logo-raptor" viewBox="0 0 160 160" aria-hidden="true"><use href="#i-raptor"/></svg>
+      <h1><span>Raptor</span><span class="o">Games</span></h1>
       <p class="pitch" id="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
     </header>
 
     <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
-      <button type="button" class="chip" data-mode="feat" role="radio">Roland Gamos</button>
+      <button type="button" class="chip mode-main" data-mode="feat" role="radio"><span class="mode-name">Roland Gamos</span><span class="mode-sub">Le jeu des feats</span></button>
       <button type="button" class="chip" data-mode="bridge" role="radio">Le pont</button>
       <button type="button" class="chip" data-mode="blind" role="radio">Blind test</button>
       <button type="button" class="chip" data-mode="fans" role="radio">Plus ou moins</button>
-      <button type="button" class="chip wide" data-mode="timeline" role="radio">La frise</button>
+      <button type="button" class="chip" data-mode="timeline" role="radio">La frise</button>
     </div>
 
     <form id="homeForm" class="panel" autocomplete="off">
@@ -87,6 +308,7 @@
       <button class="link" data-leave type="button">Quitter</button>
     </div>
 
+    <svg class="raptor lobby-raptor" viewBox="0 0 160 160" aria-hidden="true"><use href="#i-raptor"/></svg>
     <section class="invite" id="invite">
       <h2 class="lobby-title" id="lobbyTitle">Invite ton adversaire</h2>
       <button class="codebox" id="codeBox" type="button" aria-label="Copier le code du salon">
@@ -96,8 +318,8 @@
       </button>
       <p class="small" id="inviteUrl">—</p>
       <div class="invite-row">
-        <button class="btn" id="shareBtn" type="button">Partager</button>
-        <button class="btn ghost" id="copyBtn" type="button">Copier</button>
+        <button class="btn" id="shareBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg>Partager</button>
+        <button class="btn ghost" id="copyBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Copier</button>
       </div>
     </section>
 
@@ -146,7 +368,7 @@
       <div class="clock" id="clock" role="timer" aria-label="Temps restant"><span id="clockNum">∞</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"/></svg></div>
       <div class="side" data-p="1"><span class="pname"></span><span class="pscore"></span></div>
     </div>
-    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="quitBtn" type="button">Quitter</button><button class="gear" id="gearBtn" type="button" aria-label="Réglages" aria-expanded="false" aria-controls="gearMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.6 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button></span>
+    <div class="roundline"><span id="roundLabel">Manche 1</span><span class="toggles"><button class="link" id="quitBtn" type="button">Quitter</button><button class="gear" id="gearBtn" type="button" aria-label="Réglages" aria-expanded="false" aria-controls="gearMenu"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></button></span>
       <div class="gear-menu" id="gearMenu" hidden>
         <button type="button" class="gear-row" id="sfxBtn" aria-pressed="true"><span>Effets sonores</span><span class="sw"></span></button>
         <button type="button" class="gear-row" id="muteBtn" aria-pressed="false"><span>Lecture auto des extraits</span><span class="sw"></span></button>
@@ -203,6 +425,7 @@
   <!-- FIN DE MANCHE : feuille en bas, la chaîne reste visible au-dessus -->
   <div class="sheet" id="endSheet" hidden role="dialog" aria-labelledby="endTitle">
     <div class="sheet-body">
+      <svg class="raptor sheet-raptor" viewBox="0 0 160 160" aria-hidden="true"><use href="#i-raptor"/></svg>
       <p class="small" id="endKicker"></p>
       <h2 id="endTitle"></h2>
       <p id="endText"></p>
@@ -229,10 +452,11 @@
   </div>
 
   <div class="toast" id="toast" role="status" hidden></div>
-  <div class="wake" id="wake" role="status" hidden><span class="spin"></span><span id="wakeText"></span></div>
+  <div class="wake" id="wake" role="status" hidden><svg class="raptor wake-raptor" viewBox="0 0 160 160" aria-hidden="true"><use href="#i-raptor"/></svg><span id="wakeText"></span></div>
   <audio id="audio" preload="none"></audio>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/confetti.js" defer></script>
   <script src="/app.js?v=6"></script>
 </body>
 </html>
