@@ -613,4 +613,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

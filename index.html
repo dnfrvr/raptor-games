@@ -30,7 +30,10 @@
 
     <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
       <button type="button" class="chip" data-mode="feat" role="radio">Roland Gamos</button>
+      <button type="button" class="chip" data-mode="bridge" role="radio">Le pont</button>
       <button type="button" class="chip" data-mode="blind" role="radio">Blind test</button>
+      <button type="button" class="chip" data-mode="fans" role="radio">Plus ou moins</button>
+      <button type="button" class="chip wide" data-mode="timeline" role="radio">La frise</button>
     </div>
 
     <form id="homeForm" class="panel" autocomplete="off">
@@ -53,6 +56,21 @@
       <li><span><b>Tu choisis un artiste et un de ses sons.</b> Ou tu laisses le hasard faire.</span></li>
       <li><span><b>Le joueur suivant écoute 10 secondes d'extrait.</b> Il trouve l'artiste : +1 point. Le titre en plus : +1. Trouvé vite : +1 joker, pour écouter la suite d'un extrait plus tard.</span></li>
       <li><span><b>Puis c'est lui qui propose.</b> 3 essais par extrait. Le premier au score fixé gagne.</span></li>
+    </ol>
+    <ol class="rules" id="rulesBridge" aria-label="Règles du pont" hidden>
+      <li><span><b>Le jeu tire deux rappeurs</b> qui n'ont jamais fait de son ensemble.</span></li>
+      <li><span><b>Chacun son tour, cite un feat</b> avec le dernier artiste, comme au Roland Gamos.</span></li>
+      <li><span><b>Celui qui atteint le rappeur d'arrivée gagne la manche.</b> Sécher ou dépasser le chrono élimine.</span></li>
+    </ol>
+    <ol class="rules" id="rulesFans" aria-label="Règles du plus ou moins" hidden>
+      <li><span><b>Un artiste s'affiche avec ses fans Deezer.</b></span></li>
+      <li><span><b>Le suivant arrive : plus ou moins de fans ?</b> Chacun son tour.</span></li>
+      <li><span><b>Une erreur et tu sors de la manche.</b> Le dernier en jeu la gagne.</span></li>
+    </ol>
+    <ol class="rules" id="rulesTimeline" aria-label="Règles de la frise" hidden>
+      <li><span><b>Un son est posé sur la frise</b> avec sa date de sortie.</span></li>
+      <li><span><b>Chacun son tour, place un nouveau son</b> avant, après ou entre ceux déjà posés.</span></li>
+      <li><span><b>Une erreur et tu sors de la manche.</b> La frise s'allonge, ça se corse.</span></li>
     </ol>
     <ol class="rules" id="rulesFeat" aria-label="Règles">
       <li><span><b>Un artiste est posé.</b> Celui qui commence la manche le choisit.</span></li>
@@ -94,7 +112,7 @@
         <span class="field">Chrono par tour</span>
         <div class="chips" id="timerChips" role="radiogroup" aria-label="Chrono par tour"></div>
       </div>
-      <div class="set">
+      <div class="set" id="targetSet">
         <span class="field">Pour gagner</span>
         <div class="target" id="targetCtl">
           <div class="stepper" id="stepper">
@@ -129,10 +147,12 @@
     <section class="stage" aria-live="polite">
       <div class="current" id="current"></div>
       <div class="proof" id="proof" hidden></div>
+      <div class="goal" id="goal" hidden></div>
     </section>
 
     <p class="turn" id="turnBanner" aria-live="assertive"></p>
     <section class="bt" id="btPanel" hidden></section>
+    <section class="qz" id="qzPanel" hidden></section>
 
     <form class="play" id="playForm" autocomplete="off" hidden>
       <div class="ac">
@@ -153,7 +173,7 @@
 
     <div class="reacts" aria-label="Réactions"><button type="button" data-e="🔥" aria-label="Feu">🔥</button><button type="button" data-e="😂" aria-label="Mort de rire">😂</button><button type="button" data-e="💀" aria-label="Mort">💀</button><button type="button" data-e="😮" aria-label="Étonné">😮</button><button type="button" data-e="👏" aria-label="Bravo">👏</button></div>
 
-    <section class="chain-wrap" aria-label="La chaîne">
+    <section class="chain-wrap" id="chainWrap" aria-label="La chaîne">
       <h3 class="chain-title" id="chainTitle">La chaîne</h3>
       <ol class="chain" id="chain"></ol>
     </section>

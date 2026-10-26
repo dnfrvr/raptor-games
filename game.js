@@ -125,7 +125,7 @@ class Room {
 
   async start(token) {
     // Lancement : l'hôte. Revanche : n'importe quel joueur (si l'hôte est parti, les autres ne sont pas bloqués).
-    if (this.players.length < 2 || this.idx(token) < 0) return;
+    if (this.players.length < this.minPlayers() || this.idx(token) < 0) return;
     if (this.phase === 'lobby' && token !== this.hostToken) return;
     if (this.phase !== 'lobby' && this.phase !== 'finished') return;
     this.players.forEach((p) => { p.score = 0; p.jokers = 0; });
@@ -208,6 +208,25 @@ class Room {
     const n = this.players.length;
     for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!this.isOut(j)) return j; }
     return i;
+  }
+
+  // ---------- Solo sans bot (Le pont, Plus ou moins, La frise) : on joue seul jusqu'à l'erreur ----------
+  dropBot() { this.players = this.players.filter((p) => !p.bot); }
+  minPlayers() { return this.solo && !this.players.some((p) => p.bot) ? 1 : 2; }
+  // Fin de la partie solo : réussite (pont atteint) ou erreur. Le record de la session est gardé.
+  endSolo(won, reason, count) {
+    for (const t of ['timer', 'showTimer', 'botTimer', 'koTimer']) clearTimeout(this[t]);
+    const r = this.round;
+    r.deadline = null; r.reason = reason; r.winner = won ? 0 : null;
+    // Record de la session : la plus longue série (quiz) ou le pont le plus court (pont réussi).
+    let record = false;
+    if (this.mode === 'bridge') {
+      if (won && (this.soloBest == null || count < this.soloBest)) { record = this.soloBest != null; this.soloBest = count; }
+    } else if (this.soloBest == null || count > this.soloBest) { record = this.soloBest != null && count > 0; this.soloBest = count; }
+    this.soloPlays = (this.soloPlays || 0) + 1;
+    this.final = { solo: true, won: !!won, count, best: this.soloBest, record: !!record, plays: this.soloPlays };
+    this.phase = 'finished';
+    this.broadcast();
   }
 
   // Le joueur i sèche : il est éliminé de la manche. S'il ne reste qu'un joueur, il gagne la manche ;

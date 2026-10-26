@@ -566,3 +566,38 @@ body.ko-open .reacts { visibility: hidden; }
 .gear-row[aria-pressed="true"] .sw::after { transform: translateX(18px); }
 
 .gear-row[hidden] { display: none; }
+
+/* Choix du jeu : 5 modes */
+.modes .chip.wide { grid-column: 1 / -1; }
+
+/* Le pont : l'arrivée */
+.goal { display: inline-flex; align-items: center; gap: 10px; margin: 14px auto 0; padding: 8px 14px 8px 10px; background: var(--deep); border: 2px dashed var(--yellow); }
+.stage { text-align: center; }
+.goal-k { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--yellow); }
+.goal b { font-family: var(--display); font-weight: 400; font-size: 20px; text-transform: uppercase; }
+.av.sm { width: 36px; height: 36px; border-width: 3px; font-size: 16px; box-shadow: none; }
+
+/* Plus ou moins / La frise */
+.qz { margin: 14px 0 18px; display: grid; gap: 12px; }
+.qz .small { text-align: center; }
+.qz-ref { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--night-3); box-shadow: 0 4px 0 var(--deep); }
+.qz-ref > span { display: grid; }
+.qz-ref b { font-family: var(--display); font-weight: 400; font-size: 18px; text-transform: uppercase; }
+.qz-ref span span { color: var(--yellow); font-weight: 800; font-size: 17px; }
+.qz-streak { color: var(--dim); }
+.qz-cover { width: 120px; height: 120px; object-fit: cover; border: 5px solid var(--paper); box-shadow: 0 6px 0 var(--deep); }
+.current .nm.qz-t { font-size: clamp(26px, 8vw, 40px); }
+.qz-a { color: var(--mute); font-weight: 700; margin-top: -6px; }
+.qz-line { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.qz-item { display: grid; grid-template-columns: 44px auto 1fr; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; background: var(--night-3); box-shadow: 0 3px 0 var(--deep); }
+.qz-item img, .qz-item .nocover { width: 44px; height: 44px; object-fit: cover; background: var(--night-2); }
+.qz-y { font-weight: 800; color: var(--yellow); font-size: 14px; white-space: nowrap; }
+.qz-tt { display: grid; min-width: 0; }
+.qz-tt b, .qz-tt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-tt span { font-size: 13px; color: var(--mute); }
+.qz-here { width: 100%; min-height: 40px; border: 2px dashed var(--yellow); background: transparent; color: var(--yellow); font-weight: 800; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.qz-here:active { background: #ffd21f22; }
+.qz-wrong { padding: 8px; text-align: center; font-weight: 800; color: var(--paper); background: var(--red); }
+.solo-best { margin: 14px auto 0; font-size: 15px; color: var(--mute); }
+.solo-best b { font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--yellow); margin-left: 6px; }
+

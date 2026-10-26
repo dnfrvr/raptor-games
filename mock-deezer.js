@@ -2,7 +2,7 @@
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
   [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'], [19, 'Kalash'], [20, 'Vadek'], [21, 'Edge'], [22, 'Demas'], [23, 'Kekra'],
-].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: 1000000 - id }));
+].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: ((id * 7919) % 97 + 1) * 100000 + id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
   [101, 'Mood', 'Ninho', ['Niska']],
@@ -37,7 +37,7 @@ const tracks = [
   // Variante : l'invité n'est écrit que dans le titre.
   [119, 'Duo (feat. Kekra)', 'Naps', ['Tiakola']],
 ].map(([id, title, main, feats, deep]) => ({
-  id, title, title_short: title, preview: `https://cdnt-preview.dzcdn.net/mock/${id}.mp3`, link: '#', deep: !!deep,
+  id, title, title_short: title, release_date: `20${10 + (id % 14)}-0${1 + (id % 9)}-1${id % 9}`, preview: `https://cdnt-preview.dzcdn.net/mock/${id}.mp3`, link: '#', deep: !!deep,
   album: { title, cover_medium: id === 110 ? 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22%3E%3Crect width=%2246%22 height=%2246%22 fill=%22%23d90b2c%22/%3E%3Ctext x=%224%22 y=%2228%22 font-size=%2212%22 fill=%22white%22%3EFRANCISCO%3C/text%3E%3C/svg%3E' : null },
   artist: A(main),
   contributors: [{ ...A(main), role: 'Main' }, ...feats.map((f) => ({ ...A(f), role: 'Featured' }))],

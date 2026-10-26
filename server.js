@@ -7,6 +7,9 @@ const { Server } = require('socket.io');
 const deezer = require('./deezer');
 const { Room } = require('./game');
 const { BlindRoom } = require('./blindtest');
+const { BridgeRoom } = require('./bridge');
+const { QuizRoom } = require('./quiz');
+const MODES = ['feat', 'blind', 'bridge', 'fans', 'timeline'];
 
 if (process.env.DEEZER_MOCK) require('./mock-deezer').install(deezer);
 // Mémoire des feats sauvegardée sur Upstash (si configuré sur Render) : rechargée au démarrage.
@@ -72,8 +75,12 @@ io.on('connection', (socket) => {
   socket.on('create', ({ token: t, name, solo, mode }) => {
     if (!t) return;
     token = String(t);
-    const Kind = mode === 'blind' ? BlindRoom : Room;
-    room = new Kind(io, token, String(name || 'Joueur 1'), !!solo);
+    const m = MODES.includes(mode) ? mode : 'feat';
+    const nm = String(name || 'Joueur 1');
+    room = m === 'blind' ? new BlindRoom(io, token, nm, !!solo)
+      : m === 'bridge' ? new BridgeRoom(io, token, nm, !!solo)
+      : m === 'fans' || m === 'timeline' ? new QuizRoom(io, token, nm, !!solo, m)
+      : new Room(io, token, nm, !!solo);
     rooms.set(room.code, room);
     room.players[0].sockets.add(socket.id);
     room.broadcast();
@@ -110,6 +117,7 @@ io.on('connection', (socket) => {
   // Blind test : choisir le son à faire deviner, ou revenir au choix de l'artiste.
   socket.on('bt:pick', act((d) => room.pick && room.pick(token, d.id)));
   socket.on('bt:back', act(() => room.back && room.back(token)));
+  socket.on('qz:answer', act((d) => room.quizAnswer && room.quizAnswer(token, d.v)));
   socket.on('bt:search', act((d) => room.searchTrack && room.searchTrack(token, d.q)));
   socket.on('leave', () => {
     if (!room || !token) return;

@@ -6,6 +6,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
   const plural = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
+  const goodAnswers = (n) => `${n} bonne${n > 1 ? 's' : ''} réponse${n > 1 ? 's' : ''}`;
 
   let token = store.get('rg_token');
   if (!token) { token = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('rg_token', token); }
@@ -36,7 +37,8 @@
   $('#nameInput').value = store.get('rg_name', '');
 
   // Choix du jeu sur l'accueil : Roland Gamos (feats) ou Blind test. Mémorisé.
-  let mode = store.get('rg_mode', 'feat') === 'blind' ? 'blind' : 'feat';
+  const MODE_LIST = ['feat', 'blind', 'bridge', 'fans', 'timeline'];
+  let mode = MODE_LIST.includes(store.get('rg_mode', 'feat')) ? store.get('rg_mode', 'feat') : 'feat';
   function setMode(m) {
     mode = m;
     store.set('rg_mode', m);
@@ -44,11 +46,14 @@
       const on = b.dataset.mode === m;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
-    $('#pitch').textContent = m === 'blind'
-      ? 'Le blind test rap : fais deviner tes sons, trouve ceux des autres.'
-      : 'Le jeu des featurings, contre un pote ou contre le bot.';
-    $('#rulesFeat').hidden = m === 'blind';
-    $('#rulesBlind').hidden = m !== 'blind';
+    $('#pitch').textContent = {
+      blind: 'Le blind test rap : fais deviner tes sons, trouve ceux des autres.',
+      bridge: 'Relie deux rappeurs par une chaîne de feats, avant les autres.',
+      fans: 'Qui a le plus de fans sur Deezer ? Une erreur et tu sors.',
+      timeline: 'Place chaque son au bon endroit sur la frise des sorties.',
+    }[m] || 'Le jeu des featurings, contre un pote ou contre le bot.';
+    const RULES = { feat: 'rulesFeat', blind: 'rulesBlind', bridge: 'rulesBridge', fans: 'rulesFans', timeline: 'rulesTimeline' };
+    for (const [k, id] of Object.entries(RULES)) $('#' + id).hidden = k !== m;
   }
   document.querySelectorAll('#modes .chip').forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
   setMode(mode);
@@ -84,7 +89,7 @@
         $('#joinCode').hidden = false;
         $('#homeBtn').textContent = 'Créer une partie';
       } else if (info.host) {
-        $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à ${info.mode === 'blind' ? 'un blind test' : 'une partie'}.`;
+        $('#invited').innerHTML = `<b>${esc(info.host)}</b> t'invite à ${{ blind: 'un blind test', bridge: 'une partie de Pont', fans: 'un Plus ou moins', timeline: 'une partie de Frise' }[info.mode] || 'une partie'}.`;
       }
       if (info.exists && !info.started && !info.full) { $('#modes').hidden = true; if (info.mode) setMode(info.mode); }
     }).catch(() => {});
@@ -224,7 +229,7 @@
       if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
       else toast(S.code);
     };
-    if (S.mode === 'blind') renderBlind(); else renderGame();
+    if (S.mode === 'blind') renderBlind(); else if (S.mode === 'fans' || S.mode === 'timeline') renderQuiz(); else renderGame();
   }
 
   // ================= SALON =================
@@ -235,7 +240,9 @@
   function renderLobby() {
     const isHost = S.me === S.host;
     const N = S.players.length, max = S.maxPlayers || 2;
-    const ready = N >= 2;
+    // Le pont, Plus ou moins, La frise : en solo on joue seul (pas de bot), jusqu'à l'erreur.
+    const soloAlone = S.solo && !S.players.some((p) => p.bot);
+    const ready = N >= 2 || soloAlone;
     const url = `${location.origin}/r/${S.code}`;
     $('#lobbyCode').textContent = S.code;
     $('#bigCode').textContent = S.code;
@@ -256,7 +263,7 @@
     $('#copyBtn').hidden = full || !isHost;
     $('#inviteUrl').hidden = full || !isHost;
     $('#shareBtn').onclick = async () => {
-      if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: S.mode === 'blind' ? 'Viens jouer au blind test contre moi' : 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
+      if (navigator.share) { try { await navigator.share({ title: 'Roland Gamos', text: { blind: 'Viens jouer au blind test contre moi', bridge: 'Viens jouer au Pont contre moi', fans: 'Viens jouer au Plus ou moins contre moi', timeline: 'Viens jouer à la Frise contre moi' }[S.mode] || 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
       copy(url);
     };
     $('#copyBtn').onclick = () => copy(url);
@@ -279,7 +286,8 @@
     const unit = blind ? 'point' : 'manche';
     $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
-    $('#levelSet').hidden = !isHost || !S.solo;
+    $('#levelSet').hidden = !isHost || !S.solo || soloAlone;
+    $('#targetSet').hidden = !isHost || soloAlone;
     if (S.solo && isHost) {
       const el = $('#levelChips');
       el.innerHTML = LEVELS.map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === S.settings.botLevel}" class="chip ${v === S.settings.botLevel ? 'on' : ''}" data-v="${v}">${l}</button>`).join('');
@@ -298,7 +306,7 @@
       $('#targetPlus').disabled = t >= maxT;
       $('#targetMinus').onclick = () => socket.emit('settings', { target: Math.max(1, (t || 3) - (t ? 1 : 0)) });
       $('#targetPlus').onclick = () => socket.emit('settings', { target: Math.min(maxT, (t || 2) + 1) });
-      $('#targetInf').hidden = blind;
+      $('#targetInf').hidden = blind || S.mode === 'fans' || S.mode === 'timeline';
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
@@ -330,15 +338,18 @@
     if (n === scorebugFor) return;
     scorebugFor = n;
     const sb = $('#scorebug');
-    sb.classList.toggle('multi', n > 2);
-    sb.innerHTML = n <= 2
+    sb.classList.toggle('multi', n !== 2);
+    sb.innerHTML = n === 2
       ? [0, 1].map((i) => `<div class="side" data-p="${i}"><span class="pinfo"><span class="pname"></span><span class="pj"></span></span><span class="pscore"></span></div>`).join(CLOCK)
       : `${CLOCK}<ol class="roster">${Array.from({ length: n }, (_, i) => `<li class="pl p${i}" data-p="${i}"><span class="pinfo"><span class="pname"></span><span class="pj"></span></span><span class="pscore"></span></li>`).join('')}</ol>`;
   }
 
   function renderGame() {
     $('#btPanel').hidden = true;
+    $('#qzPanel').hidden = true;
+    $('#chainWrap').hidden = false;
     $('#muteBtn').hidden = false;
+    const bridge = S.mode === 'bridge';
     const r = S.round;
     const N = S.players.length;
     // À deux : on parle de l'adversaire par son nom ; à plusieurs : « les autres ».
@@ -361,7 +372,7 @@
       el.classList.toggle('me', i === S.me);
       el.classList.toggle('out', S.phase === 'playing' && outSet.has(i));
     });
-    $('#roundLabel').textContent = S.settings.target ? `Manche ${S.roundNo}, premier à ${S.settings.target}` : `Manche ${S.roundNo}, sans limite`;
+    $('#roundLabel').textContent = S.mode === 'bridge' && S.solo ? 'Le pont, solo' : S.settings.target ? `Manche ${S.roundNo}, premier à ${S.settings.target}` : `Manche ${S.roundNo}, sans limite`;
     syncMute();
 
     if (!r) return;
@@ -400,6 +411,13 @@
       // Nouvelle saisie seulement quand la chaîne avance : en cas d'erreur, le joueur garde ce qu'il a tapé.
       $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null;
     }
+    // Le pont : l'arrivée à atteindre, toujours visible sous l'artiste en jeu.
+    const goal = $('#goal');
+    goal.hidden = !(bridge && r.target);
+    if (bridge && r.target && goal.dataset.id !== String(r.target.id)) {
+      goal.dataset.id = String(r.target.id);
+      goal.innerHTML = `<span class="goal-k">Arrivée</span>${avatar(r.target, 'sm')}<b>${esc(r.target.name)}</b>`;
+    }
     if (redraw) {
       const proof = $('#proof');
       // Le son qui prouve le feat est déjà affiché dans la chaîne : pas de doublon sous l'artiste.
@@ -407,7 +425,7 @@
         proof.hidden = true;
       } else if (last) {
         proof.hidden = false;
-        proof.textContent = last.random ? `Tiré au hasard pour ${S.players[last.by]?.name || ''}` : `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
+        proof.textContent = last.bridge ? 'Départ du pont' : last.random ? `Tiré au hasard pour ${S.players[last.by]?.name || ''}` : `Choisi par ${S.players[last.by]?.name || ''} pour lancer la chaîne`;
       } else proof.hidden = true;
     }
 
@@ -415,7 +433,8 @@
     const banner = $('#turnBanner');
     banner.hidden = !playing;
     banner.className = 'turn ' + (myTurn ? 'me' : 'them');
-    banner.innerHTML = choosing
+    banner.innerHTML = bridge && choosing ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
+      : choosing
       ? (myTurn ? 'À toi de choisir l’artiste de départ.' : `${esc(turnName)} choisit l’artiste de départ.`)
       : myTurn ? `À toi. Qui a fait un son avec <b>${esc(cur.name)}</b> ?` : `${esc(turnName)} cherche un feat avec <b>${esc(cur.name)}</b>.`;
 
@@ -434,7 +453,7 @@
     document.title = !playing ? 'Roland Gamos' : myTurn ? '● À toi | Roland Gamos' : `${turnName} joue | Roland Gamos`;
 
     // --- Formulaire du joueur actif ---
-    $('#playForm').hidden = !myTurn;
+    $('#playForm').hidden = !myTurn || (bridge && choosing);
     $('#songInput').hidden = choosing;
     $('#giveupBtn').hidden = choosing;
     $('#randomBtn').hidden = !choosing;
@@ -453,8 +472,9 @@
     }
 
     // --- Vue de l'adversaire ---
-    $('#watch').hidden = myTurn || !playing;
-    if (!myTurn && playing) {
+    $('#watch').hidden = (myTurn && !(bridge && choosing)) || !playing;
+    if (bridge && choosing && playing) $('#watch').innerHTML = r.lastError ? 'Deezer ne répond pas, impossible de tirer un pont. Réessaie la manche suivante.' : '<span class="dots">Préparation du pont</span>';
+    else if (!myTurn && playing) {
       let txt = `<span class="dots">${choosing ? 'Choix en cours' : 'Recherche en cours'}</span>`;
       if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
       else if (r.checking && r.checking.joker) txt = `<span class="spin"></span>${esc(turnName)} utilise un joker 🃏`;
@@ -495,7 +515,7 @@
       $('#chain').innerHTML = r.chain.length ? r.chain.map((l, i) => {
         const who = esc(S.players[l.by]?.name || '');
         const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">Rare</span>' : '') + (l.joker ? ' <span class="tag">Joker</span>' : '') + (l.relaunch ? ' <span class="tag">Relance</span>' : '');
-        const detail = (i === 0 ? `<span class="by">lancé par ${who}</span>` : `<span class="by">${who}</span>`) + badges;
+        const detail = (i === 0 ? `<span class="by">${l.bridge ? 'départ' : `lancé par ${who}`}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
       }).reverse().join('') : `<li class="empty">Les feats validés s'affichent ici.</li>`;
       bindTracks();
@@ -541,6 +561,151 @@
   // Même écran que le Roland Gamos : bandeau des scores, chrono, scène, formulaire, réactions, historique.
   let btStepKey = '', btLogLen = -1, btFbKey = '', btGiveKey = '', btResultKey = '';
   const nameOf = (i, cap) => (i === S.me ? (cap ? 'Tu' : 'toi') : S.players[i]?.name || '');
+
+  // ================= PLUS OU MOINS / LA FRISE =================
+  const fmtNum = (n) => Number(n || 0).toLocaleString('fr-FR');
+  const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
+  let qzKey = '', qzResId = null, qzOutKey = '';
+
+  function renderQuiz() {
+    const r = S.round;
+    const fans = S.mode === 'fans';
+    const N = S.players.length;
+    buildScorebug(N);
+    const outSet = new Set((r?.out || []).map((o) => o.who));
+    document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
+      const i = Number(el.dataset.p);
+      const p = S.players[i] || { name: '—', score: 0, online: false };
+      el.querySelector('.pname').textContent = p.name;
+      el.querySelector('.pj').textContent = '';
+      el.querySelector('.pscore').textContent = p.score;
+      el.classList.toggle('active', !!r && S.phase === 'playing' && r.turn === i);
+      el.classList.toggle('off', !p.online);
+      el.classList.toggle('me', i === S.me);
+      el.classList.toggle('out', S.phase === 'playing' && outSet.has(i));
+    });
+    $('#roundLabel').textContent = S.solo ? (fans ? 'Plus ou moins, solo' : 'La frise, solo') : `Manche ${S.roundNo}, premier à ${S.settings.target}`;
+    $('#muteBtn').hidden = true; $('#jokerBtn').hidden = true; $('#judgeOverlay').hidden = true; $('#ko').hidden = true;
+    $('#btPanel').hidden = true; $('#playForm').hidden = true; $('#goal').hidden = true; $('#proof').hidden = true;
+    $('#chainWrap').hidden = true;
+    if (!r) return;
+
+    const playing = S.phase === 'playing';
+    const myTurn = playing && r.turn === S.me && !outSet.has(S.me);
+    const turnName = S.players[r.turn]?.name || '';
+    const res = r.result;
+    const items = r.items || [];
+    const next = r.next;
+    const prev = items[items.length - 1];
+
+    // --- Scène : ce qu'il faut juger ---
+    const key = `${r.id}-${items.length}-${next ? (fans ? next.artist.id : next.track.id) : 'x'}-${res ? res.id : ''}`;
+    if (key !== qzKey) {
+      qzKey = key;
+      let html = '<span class="av q" aria-hidden="true">?</span><span class="nm q">Chargement…</span>';
+      if (next && fans) html = `${avatar(next.artist)}<span class="nm">${esc(next.artist.name)}</span>`;
+      else if (next) html = `${next.track.cover ? `<img class="qz-cover" src="${esc(next.track.cover)}" alt="">` : '<span class="av q" aria-hidden="true">♪</span>'}<span class="nm qz-t">${esc(next.track.title)}</span><span class="qz-a">${esc(next.track.artist || '')}</span>`;
+      $('#current').innerHTML = html;
+      if (!res) { $('#current').classList.remove('pop'); void $('#current').offsetWidth; $('#current').classList.add('pop'); }
+    }
+
+    // --- Bandeau ---
+    const banner = $('#turnBanner');
+    banner.hidden = !playing;
+    banner.className = 'turn ' + (myTurn ? 'me' : 'them');
+    if (res) {
+      const who = res.who === S.me ? 'Tu' : S.players[res.who]?.name;
+      const truth = fans ? (next && next.fans != null ? `${esc(next.artist.name)} a <b>${fmtNum(next.fans)}</b> fans.` : '') : (next && next.date ? `Sorti le <b>${fmtDate(next.date)}</b>.` : '');
+      banner.innerHTML = res.ok ? `${res.who === S.me ? 'Bien vu' : esc(who) + ' a vu juste'} ! ${truth}` : `${res.value == null ? 'Temps écoulé' : 'Raté'}${res.who === S.me ? '' : ` pour ${esc(who)}`}. ${truth}`;
+      banner.className = 'turn ' + (res.ok ? 'me' : 'them');
+    } else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
+    else if (fans) banner.innerHTML = myTurn ? `À toi : <b>${esc(next.artist.name)}</b> a-t-il plus ou moins de fans que <b>${esc(prev.artist.name)}</b> ?` : `${esc(turnName)} réfléchit : plus ou moins que ${esc(prev.artist.name)} ?`;
+    else banner.innerHTML = myTurn ? 'À toi : <b>où placer ce son</b> sur la frise ?' : `${esc(turnName)} place ce son sur la frise.`;
+    document.title = !playing ? 'Roland Gamos' : myTurn ? '● À toi | Roland Gamos' : `${turnName} joue | Roland Gamos`;
+
+    // --- Panneau ---
+    const panel = $('#qzPanel');
+    panel.hidden = !playing && S.phase !== 'roundEnd' && S.phase !== 'finished';
+    const pkey = `${key}-${myTurn}-${S.phase}`;
+    if (panel.dataset.key !== pkey) {
+      panel.dataset.key = pkey;
+      const can = myTurn && next && !res && !r.checking;
+      if (fans) {
+        const shown = prev ? `<div class="qz-ref">${avatar(prev.artist, 'sm')}<span><b>${esc(prev.artist.name)}</b><span>${fmtNum(prev.fans)} fans</span></span></div>` : '';
+        const choice = res && res.value ? `<p class="small">Réponse : ${res.value === 'more' ? 'plus' : 'moins'} de fans.</p>` : '';
+        panel.innerHTML = shown + choice + (can ? `<div class="play-row"><button type="button" class="btn" id="qzMore">Plus ▲</button><button type="button" class="btn ghost" id="qzLess">Moins ▼</button></div>` : '')
+          + `<p class="small qz-streak">Série : ${goodAnswers(Math.max(0, items.length - 1))}</p>`;
+        if (can) { $('#qzMore').onclick = () => socket.emit('qz:answer', { v: 'more' }); $('#qzLess').onclick = () => socket.emit('qz:answer', { v: 'less' }); }
+      } else {
+        // La frise, du plus ancien au plus récent ; des emplacements « Ici » entre les sons pour le joueur actif.
+        const slot = (k) => (can ? `<li class="qz-slot"><button type="button" class="qz-here" data-k="${k}">Ici</button></li>` : '');
+        const mark = res && !res.ok && res.slot != null ? res.slot : null;
+        let html = '';
+        items.forEach((it, k) => {
+          html += slot(k) + (mark === k ? '<li class="qz-wrong">Placé ici</li>' : '');
+          html += `<li class="qz-item">${it.track.cover ? `<img src="${esc(it.track.cover)}" alt="">` : '<span class="nocover"></span>'}<span class="qz-y">${esc(fmtDate(it.date))}</span><span class="qz-tt"><b>${esc(it.track.title)}</b><span>${esc(it.track.artist || '')}</span></span></li>`;
+        });
+        html += slot(items.length) + (mark === items.length ? '<li class="qz-wrong">Placé ici</li>' : '');
+        panel.innerHTML = `<p class="small">${plural(items.length, 'son')} sur la frise, du plus ancien au plus récent.</p><ol class="qz-line">${html}</ol>`;
+        if (can) panel.querySelectorAll('.qz-here').forEach((b) => (b.onclick = () => socket.emit('qz:answer', { v: Number(b.dataset.k) })));
+      }
+    }
+
+    // --- Les autres ---
+    $('#watch').hidden = true;
+    const p = S.players[r.turn];
+    if (playing && !myTurn && p && !p.online && !res) {
+      const alone = !S.players.some((x, i) => i !== S.me && !x.bot && x.online);
+      $('#watch').hidden = false;
+      $('#watch').innerHTML = `${esc(p.name)} s'est déconnecté. La partie reprend dès son retour.` + (S.solo ? '' : `<span class="rejoin">Pour revenir : code <b>${esc(S.code)}</b> sur l’accueil.</span>`)
+        + (alone ? `<button type="button" class="btn ghost small-btn" id="quitGameBtn">Quitter la partie</button>` : '');
+      if (alone) $('#quitGameBtn').onclick = leaveRoom;
+    }
+
+    // Sons et annonces
+    if (res && res.id !== qzResId) { qzResId = res.id; (res.ok ? sfx.ding : sfx.buzz)(); if (myTurn || res.who === S.me) { if (navigator.vibrate) try { navigator.vibrate(res.ok ? 40 : [30, 40, 30]); } catch {} } }
+    const outKey = `${r.id}-${(r.out || []).length}`;
+    if (outKey !== qzOutKey) {
+      if (qzOutKey && r.out && r.out.length && playing) { const o = r.out[r.out.length - 1]; toast(`${o.who === S.me ? 'Tu es éliminé' : S.players[o.who].name + ' est éliminé'} de la manche`, 3000); sfx.out(); }
+      qzOutKey = outKey;
+    }
+    renderQuizEnd(r);
+    tickClock();
+  }
+
+  function renderQuizEnd(r) {
+    if (S.phase === 'finished' && S.final && S.final.solo) return renderSoloEnd(r);
+    const ended = S.phase === 'roundEnd' || S.phase === 'finished';
+    const sheet = $('#endSheet');
+    const wasHidden = sheet.hidden;
+    sheet.hidden = !ended;
+    document.body.classList.toggle('sheet-open', ended);
+    if (!ended) return;
+    const fin = S.phase === 'finished';
+    const w = fin && S.final ? S.final.winner : r.winner;
+    const N = S.players.length;
+    const streak = Math.max(0, (r.items || []).length - 1);
+    $('#endKicker').textContent = fin ? 'Fin de la partie' : `Fin de la manche ${S.roundNo}`;
+    $('#endTitle').textContent = fin ? (w === S.me ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (r.winner === S.me ? 'Manche pour toi' : `Manche pour ${S.players[r.winner].name}`);
+    sheet.classList.toggle('win', w === S.me);
+    const lo = r.lastOut;
+    $('#endText').textContent = `${lo ? `${lo.who === S.me ? 'Tu t’es trompé' : S.players[lo.who].name + ' s’est trompé'}` : 'Fin'} après une série de ${goodAnswers(streak)}.`;
+    $('#endExamples').hidden = true;
+    $('#endScore').innerHTML = N === 2
+      ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
+      : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
+    renderRecap(fin && S.final ? S.final.recap : null);
+    const btn = $('#endBtn');
+    btn.hidden = false;
+    if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => socket.emit('start'); }
+    else {
+      const nextStarter = S.players[S.roundNo % N]?.name;
+      btn.textContent = 'Manche suivante'; btn.onclick = () => socket.emit('next');
+      $('#endText').textContent += ` ${nextStarter === S.players[S.me]?.name ? 'Tu commences' : nextStarter + ' commence'} la prochaine.`;
+    }
+    $('#stopBtn').hidden = true;
+    if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if ((fin ? w : r.winner) === S.me) sfx.win(); else sfx.out(); }
+  }
 
   function renderBlind() {
     const r = S.round;
@@ -590,6 +755,7 @@
         setTimeout(() => { $('#playForm').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('#artistInput').focus({ preventScroll: true }); }, 80);
       }
     }
+    $('#qzPanel').hidden = true; $('#goal').hidden = true; $('#chainWrap').hidden = false;
     const disc = $('#btDisc');
     if (disc) {
       syncPlayButtons();
@@ -773,6 +939,7 @@
 
   function renderFeedback(r, cur, opp, oppTo) {
     const fb = $('#feedback');
+    if (!cur && S.mode === 'bridge') { fb.hidden = true; return; } // pont en préparation
     if (r.checking && r.checking.verifying) {
       fb.hidden = false; fb.className = 'feedback info';
       fb.innerHTML = `<span class="spin"></span>On vérifie qu'il reste des feats avec ${esc(r.checking.artist.name)}… Chrono en pause.`;
@@ -817,7 +984,7 @@
       refused: `<b>${esc(e.artist.name)}</b> a été refusé. Propose un autre artiste.`,
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
-    const canAppeal = e.why === 'notfound' || e.why === 'api';
+    const canAppeal = (e.why === 'notfound' || e.why === 'api') && !(S.solo && S.mode === 'bridge');
     const max = r.maxTries || 3, left = max - (r.tries || 0);
     const triesMsg = e.why === 'api' || e.why === 'random' || e.why === 'joker' ? ''
       : left <= 0 ? ''
@@ -883,7 +1050,33 @@
     }
   }
 
+  // Fin d'une partie solo sans bot (pont, plus ou moins, frise) : le résultat et le record de la session.
+  function renderSoloEnd(r) {
+    const f = S.final;
+    const sheet = $('#endSheet');
+    const wasHidden = sheet.hidden;
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    const bridge = S.mode === 'bridge';
+    $('#endKicker').textContent = bridge ? 'Le pont' : S.mode === 'fans' ? 'Plus ou moins' : 'La frise';
+    $('#endTitle').textContent = bridge ? (f.won ? 'Pont réussi' : 'Perdu') : f.record ? 'Nouveau record' : 'Perdu';
+    sheet.classList.toggle('win', !!(f.won || f.record));
+    const why = r.reason === 'timeout' ? 'Temps écoulé' : r.reason === 'ko' ? 'K.O., plus aucun feat possible' : r.reason === 'giveup' ? 'Tu as séché' : r.reason === 'tries' ? 'Plus d’essais' : 'Mauvaise réponse';
+    $('#endText').textContent = bridge
+      ? (f.won ? `Tu relies ${r.start ? r.start.name : ''} à ${r.target ? r.target.name : ''} en ${plural(f.count, 'feat')}.` : `${why}. Il fallait rejoindre ${r.target ? r.target.name : ''}.`) + (r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '')
+      : `${why} après une série de ${goodAnswers(f.count)}.`;
+    $('#endExamples').hidden = true;
+    $('#endScore').innerHTML = f.best != null && f.plays > 1
+      ? `<p class="solo-best">${bridge ? 'Pont le plus court' : 'Meilleure série'} de la session : <b>${f.best}</b></p>` : '';
+    $('#endRecap').hidden = true;
+    const btn = $('#endBtn');
+    btn.hidden = false; btn.textContent = 'Rejouer'; btn.onclick = () => socket.emit('start');
+    $('#stopBtn').hidden = true;
+    if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if (f.won || f.record) sfx.win(); else sfx.out(); }
+  }
+
   function renderEnd(r, cur) {
+    if (S.phase === 'finished' && S.final && S.final.solo) return renderSoloEnd(r);
     const ended = S.phase === 'roundEnd' || S.phase === 'finished';
     const sheet = $('#endSheet');
     const wasHidden = sheet.hidden;
@@ -909,6 +1102,12 @@
       ? (w == null ? 'Score parfaitement égal.' : `Score final en faveur de ${S.players[w].name}.`)
       : (lastOut.on ? (r.reason === 'ko' ? `${why} avec ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.` : `${why} sur ${lastOut.on}, après une chaîne de ${plural(n, 'feat')}.`) : `${why} avant même de poser l'artiste de départ.`)
         + (N > 2 ? (r.winner === S.me ? ' Tu es le dernier en jeu.' : ` ${S.players[r.winner].name} est le dernier en jeu.`) : '');
+    // Le pont : gagné en atteignant l'arrivée ; on montre aussi le chemin prévu par le jeu.
+    if (S.mode === 'bridge' && r.target) {
+      const via = r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '';
+      if (r.reason === 'bridge') $('#endText').textContent = `${S.players[r.winner].name === S.players[S.me]?.name ? 'Tu relies' : S.players[r.winner].name + ' relie'} ${r.start ? r.start.name : ''} à ${r.target.name} en ${plural(n, 'feat')}.${via}`;
+      else if (via) $('#endText').textContent += via;
+    }
     $('#endScore').innerHTML = N === 2
       ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
       : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
@@ -953,6 +1152,10 @@
     const key = JSON.stringify(rc);
     if (el.dataset.key === key) return;
     el.dataset.key = key;
+    if (rc.quiz) {
+      el.innerHTML = `<p class="recap-title">Le récap</p><ul class="recap-facts"><li><b>${rc.best}</b><span>meilleure série</span></li><li><b>${rc.rounds}</b><span>${rc.rounds > 1 ? 'manches' : 'manche'}</span></li></ul><ul class="recap-players">${rc.players.map((st, i) => S.players[i] ? `<li class="recap-p p${i}${i === S.me ? ' me' : ''}"><span class="recap-name">${esc(S.players[i].name)}</span><span class="recap-stats">${goodAnswers(st.good)} · ${plural(st.rounds, 'manche')} gagnée${st.rounds > 1 ? 's' : ''}</span></li>` : '').join('')}</ul>`;
+      return;
+    }
     if (rc.blind) {
       el.innerHTML = `<p class="recap-title">Le récap</p><ul class="recap-players">${rc.players.map((st, i) => {
         const p = S.players[i];
