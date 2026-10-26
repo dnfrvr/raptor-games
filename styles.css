@@ -694,4 +694,6 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .br-form #giveupBtn, .br-form #randomBtn { min-height: 44px; font-size: 16px; padding: 8px 10px; }
 .br-form.solo-action #giveupBtn { grid-column: 1 / -1; }
 .br-form #randomBtn { --edge: var(--deep); background-color: var(--night-3); color: var(--paper); }
+/* Les compteurs +/− prennent la largeur de leur contenu, pas toute la ligne */
+.stepper { width: fit-content; max-width: 100%; }
 

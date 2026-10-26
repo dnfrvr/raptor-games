@@ -18,7 +18,6 @@ class BridgeRoom extends Room {
     this.mode = 'bridge';
     if (solo) this.dropBot();
     this.settings.turnSeconds = 180; // ici : durée totale d'un pont
-    this.settings.bridgeLen = 2;     // longueur du pont : 2 ou 3 feats
     this.nextBridge = null;
     this.prepareBridge(); // dès le salon, le premier pont est tiré et ses artistes préparés
   }
@@ -28,50 +27,51 @@ class BridgeRoom extends Room {
     if (RACE_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);
     const t = Number(s.target);
     if (Number.isInteger(t) && t >= 1 && t <= 10) this.settings.target = t;
-    const len = Number(s.bridgeLen);
-    if ((len === 2 || len === 3) && len !== this.settings.bridgeLen) {
-      this.settings.bridgeLen = len;
-      if (this.nextBridge && this.nextBridge.len !== len) { this.nextBridge = null; this.prepareBridge(); }
-    }
     this.broadcast();
   }
 
-  // Tire deux rappeurs A et B à 3 feats l'un de l'autre (A–X, X–Y, Y–B), sans chemin plus court connu :
-  // B n'a fait de son ni avec A, ni avec aucun partenaire de A. Si aucun pont à 3 n'est trouvé, on se rabat sur 2.
-  async makeBridge(len = this.settings.bridgeLen || 2) {
+  // Longueur du pont tirée au hasard à chaque manche : souvent 2 ou 3, parfois 4, 5 ou 6 (plus dur).
+  static randomLen() {
+    const r = Math.random();
+    return r < 0.25 ? 2 : r < 0.55 ? 3 : r < 0.8 ? 4 : r < 0.93 ? 5 : 6;
+  }
+
+  // Marche au hasard de `len` feats depuis un rappeur de départ. Chaque nouvel artiste ne doit avoir fait de son
+  // avec aucun des artistes déjà sur le chemin (sauf le précédent) : pas de raccourci évident.
+  // Si un pont de cette longueur n'est pas trouvé, on garde le plus long trouvé (au moins 2).
+  async makeBridge(len = BridgeRoom.randomLen()) {
     const n = (x) => deezer.norm(x.name);
     const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
-    let fallback = null;
-    for (let attempt = 0; attempt < 10; attempt++) {
+    let best = null;
+    for (let attempt = 0; attempt < 12; attempt++) {
       try {
         const name = rand(FR_RAPPERS);
         const A = (await deezer.searchArtists(name, 5)).find((x) => n(x) === deezer.norm(name));
         if (!A) continue;
-        const c1 = await collab(A);
-        if (c1.length < 2) continue;
-        const near1 = new Set(c1.map((o) => n(o.artist)));
-        // Partenaires des partenaires de A (pour écarter les arrivées à 2 feats).
-        const lists = len === 3 ? await Promise.allSettled(c1.slice(0, 15).map((o) => collab(o.artist))) : [];
-        const near2 = new Set();
-        lists.forEach((r) => r.status === 'fulfilled' && r.value.forEach((o) => near2.add(n(o.artist))));
-        const xs = c1.slice(0, 15).sort(() => Math.random() - 0.5).slice(0, 4);
-        for (const X of xs) {
-          const cx = (await collab(X.artist)).filter((o) => !same(o.artist, A) && !near1.has(n(o.artist)));
-          if (!cx.length) continue;
-          if (!fallback) { const B2 = rand(cx, 12); fallback = { A, path: [A, X.artist, B2.artist], tracks: [X.track, B2.track] }; }
-          if (len === 2) return this.finishBridge(fallback); // pont de 2 feats : celui-ci suffit
-          for (const Y of cx.sort(() => Math.random() - 0.5).slice(0, 3)) {
-            const cy = (await collab(Y.artist)).filter((o) => !same(o.artist, A) && !same(o.artist, X.artist)
-              && !near1.has(n(o.artist)) && !near2.has(n(o.artist)));
-            if (!cy.length) continue;
-            const B = rand(cy, 12);
-            if (deezer.knownFeat(A, B.artist)) continue;
-            return this.finishBridge({ A, path: [A, X.artist, Y.artist, B.artist], tracks: [X.track, Y.track, B.track] });
-          }
+        const path = [A], tracks = [];
+        const onPath = new Set([n(A)]);
+        const nearEarlier = new Set(); // voisins des artistes du chemin avant l'artiste courant
+        let cur = A;
+        for (let step = 1; step <= len; step++) {
+          const cand = await collab(cur);
+          const ok = cand.filter((o) => !onPath.has(n(o.artist)) && !nearEarlier.has(n(o.artist)));
+          if (!ok.length) break;
+          const pick = rand(ok, 15); // parmi ses feats les plus connus : des artistes qu'on peut trouver
+          cand.forEach((o) => nearEarlier.add(n(o.artist)));
+          path.push(pick.artist); tracks.push(pick.track); onPath.add(n(pick.artist));
+          cur = pick.artist;
         }
+        const got = path.length - 1;
+        if (got < 2) continue;
+        if (!best || got > best.path.length - 1) best = { A, path, tracks };
+        if (got >= len) break;
       } catch (e) { console.error('bridge', e.message); }
     }
-    return fallback ? this.finishBridge(fallback) : null;
+    if (!best) return null;
+    const b = await this.finishBridge(best);
+    // 3 feats ou plus : on vérifie qu'aucun chemin en 2 n'est connu (départ voisin d'un partenaire de l'arrivée).
+    if (b.len >= 3 && b.dist && (b.dist.t1.has(n(b.A)) || b.dist.t2.has(n(b.A)))) b.shortcut = true;
+    return b;
   }
   async finishBridge({ A, path, tracks }) {
     const last = path[path.length - 1];
@@ -114,9 +114,7 @@ class BridgeRoom extends Room {
     if (this.loadingBridge || this.nextBridge) return;
     this.loadingBridge = true;
     try {
-      const len = this.settings.bridgeLen;
-      const b = await this.makeBridge(len);
-      if (this.settings.bridgeLen === len) this.nextBridge = b;
+      this.nextBridge = await this.makeBridge();
     } finally { this.loadingBridge = false; }
   }
 
@@ -132,7 +130,7 @@ class BridgeRoom extends Room {
     };
     this.phase = 'playing';
     this.broadcast();
-    let b = this.nextBridge && this.nextBridge.len <= this.settings.bridgeLen ? this.nextBridge : null;
+    let b = this.nextBridge;
     this.nextBridge = null;
     for (let k = 0; k < 2 && !b && this.round === r; k++) b = await this.makeBridge();
     if (this.round !== r) return;
@@ -142,9 +140,11 @@ class BridgeRoom extends Room {
     r.start = b.A; r.target = b.B;
     r.solution = { via: b.via, path: b.path.map((x) => ({ id: x.id, name: x.name })), tracks: b.tracks };
     r.dist = b.dist;
-    // Le plus court chemin : celui du jeu (3 feats en général), sauf si un raccourci est connu.
-    const known = this.left(r, b.A);
-    r.shortest = known != null && known < 3 ? Math.min(known, b.path.length - 1) : b.path.length - 1;
+    // Chemin connu du jeu. Jusqu'à 3 feats, on sait que c'est le plus court (aucun raccourci connu) ;
+    // au-delà, c'est le chemin du jeu, et un plus court peut exister : à vous de le trouver.
+    const known = this.left(r, b.A); // 1, 2, ou 3 (= au moins 3)
+    r.pathLen = b.path.length - 1;
+    r.shortest = known != null && known < 3 ? Math.min(known, r.pathLen) : r.pathLen <= 3 ? r.pathLen : null;
     r.lanes.forEach((l) => l.chain.push({ artist: b.A, track: null }));
     r.startedAt = Date.now();
     if (this.settings.turnSeconds) {
@@ -276,8 +276,9 @@ class BridgeRoom extends Room {
       paused: !r.deadline, out: [],
       // Ma chaîne (complète) ; celle des autres reste cachée pendant la course (seulement leur avancée).
       chain: mine ? mine.chain : [],
-      me: mine ? { done: mine.done, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? r.shortest ?? null } : null,
+      me: mine ? { done: mine.done, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? (r.start ? this.left(r, r.start) : null) } : null,
       shortest: r.shortest ?? null,
+      pathLen: r.pathLen ?? null,
       checking: mine ? mine.checking : false,
       lanes: r.lanes.map((l, i) => ({
         links: l.chain.length - 1, done: l.done, doneAt: l.doneAt, gaveUp: l.gaveUp,
