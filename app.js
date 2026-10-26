@@ -290,9 +290,15 @@
     const race = S.mode === 'bridge';
     const secTxt = (v) => (race ? (v ? `${v / 60} min` : 'Sans limite') : v ? v + ' s' : 'Aucun');
     $('#timerLabel').textContent = race ? 'Temps pour chaque pont' : 'Chrono par tour';
-    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}${race ? `, ponts de <b>${S.settings.bridgeLen || 2} feats</b>` : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#pointsSet').hidden = !isHost || !blind;
+    $('#lenSet').hidden = !isHost || !race;
+    if (isHost && race) {
+      const len = S.settings.bridgeLen || 2;
+      $('#lenChips').innerHTML = [2, 3].map((v) => `<button type="button" role="radio" aria-checked="${v === len}" class="chip ${v === len ? 'on' : ''}" data-v="${v}">${v} feats</button>`).join('');
+      $('#lenChips').querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { bridgeLen: Number(b.dataset.v) })));
+    }
     if (isHost && blind) {
       $('#ptsOut').textContent = plural(pts, 'point');
       $('#ptsMinus').disabled = pts <= 2; $('#ptsPlus').disabled = pts >= 20;

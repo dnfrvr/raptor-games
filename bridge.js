@@ -18,6 +18,7 @@ class BridgeRoom extends Room {
     this.mode = 'bridge';
     if (solo) this.dropBot();
     this.settings.turnSeconds = 180; // ici : durée totale d'un pont
+    this.settings.bridgeLen = 2;     // longueur du pont : 2 ou 3 feats
     this.nextBridge = null;
     this.prepareBridge(); // dès le salon, le premier pont est tiré et ses artistes préparés
   }
@@ -27,12 +28,17 @@ class BridgeRoom extends Room {
     if (RACE_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);
     const t = Number(s.target);
     if (Number.isInteger(t) && t >= 1 && t <= 10) this.settings.target = t;
+    const len = Number(s.bridgeLen);
+    if ((len === 2 || len === 3) && len !== this.settings.bridgeLen) {
+      this.settings.bridgeLen = len;
+      if (this.nextBridge && this.nextBridge.len !== len) { this.nextBridge = null; this.prepareBridge(); }
+    }
     this.broadcast();
   }
 
   // Tire deux rappeurs A et B à 3 feats l'un de l'autre (A–X, X–Y, Y–B), sans chemin plus court connu :
   // B n'a fait de son ni avec A, ni avec aucun partenaire de A. Si aucun pont à 3 n'est trouvé, on se rabat sur 2.
-  async makeBridge() {
+  async makeBridge(len = this.settings.bridgeLen || 2) {
     const n = (x) => deezer.norm(x.name);
     const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
     let fallback = null;
@@ -45,7 +51,7 @@ class BridgeRoom extends Room {
         if (c1.length < 2) continue;
         const near1 = new Set(c1.map((o) => n(o.artist)));
         // Partenaires des partenaires de A (pour écarter les arrivées à 2 feats).
-        const lists = await Promise.allSettled(c1.slice(0, 15).map((o) => collab(o.artist)));
+        const lists = len === 3 ? await Promise.allSettled(c1.slice(0, 15).map((o) => collab(o.artist))) : [];
         const near2 = new Set();
         lists.forEach((r) => r.status === 'fulfilled' && r.value.forEach((o) => near2.add(n(o.artist))));
         const xs = c1.slice(0, 15).sort(() => Math.random() - 0.5).slice(0, 4);
@@ -53,6 +59,7 @@ class BridgeRoom extends Room {
           const cx = (await collab(X.artist)).filter((o) => !same(o.artist, A) && !near1.has(n(o.artist)));
           if (!cx.length) continue;
           if (!fallback) { const B2 = rand(cx, 12); fallback = { A, path: [A, X.artist, B2.artist], tracks: [X.track, B2.track] }; }
+          if (len === 2) return this.finishBridge(fallback); // pont de 2 feats : celui-ci suffit
           for (const Y of cx.sort(() => Math.random() - 0.5).slice(0, 3)) {
             const cy = (await collab(Y.artist)).filter((o) => !same(o.artist, A) && !same(o.artist, X.artist)
               && !near1.has(n(o.artist)) && !near2.has(n(o.artist)));
@@ -71,7 +78,7 @@ class BridgeRoom extends Room {
     const B = (await deezer.searchArtists(last.name, 5)).find((x) => x.id === last.id) || last;
     path[path.length - 1] = B;
     deezer.prepare(A); deezer.prepare(B);
-    return { A, B, via: path[1], path, tracks, dist: await this.distances(B) };
+    return { A, B, via: path[1], path, tracks, len: path.length - 1, dist: await this.distances(B) };
   }
   // Distances jusqu'à l'arrivée (d'après les feats connus sur Deezer) : qui a fait un son avec elle (1 feat),
   // et qui a fait un son avec l'un d'eux (2 feats). Au-delà : « au moins 3 ».
@@ -106,7 +113,11 @@ class BridgeRoom extends Room {
   async prepareBridge() {
     if (this.loadingBridge || this.nextBridge) return;
     this.loadingBridge = true;
-    try { this.nextBridge = await this.makeBridge(); } finally { this.loadingBridge = false; }
+    try {
+      const len = this.settings.bridgeLen;
+      const b = await this.makeBridge(len);
+      if (this.settings.bridgeLen === len) this.nextBridge = b;
+    } finally { this.loadingBridge = false; }
   }
 
   // ---------- Une manche = un pont ----------
@@ -121,7 +132,7 @@ class BridgeRoom extends Room {
     };
     this.phase = 'playing';
     this.broadcast();
-    let b = this.nextBridge;
+    let b = this.nextBridge && this.nextBridge.len <= this.settings.bridgeLen ? this.nextBridge : null;
     this.nextBridge = null;
     for (let k = 0; k < 2 && !b && this.round === r; k++) b = await this.makeBridge();
     if (this.round !== r) return;
