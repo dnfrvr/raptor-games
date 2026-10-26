@@ -1,8 +1,14 @@
 services:
   - type: web
-    name: roland-gamos
+    name: raptor-games
     runtime: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
+    envVars:
+      # Mémoire des feats sauvegardée sur Upstash (Render demande les valeurs à la création du blueprint).
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
