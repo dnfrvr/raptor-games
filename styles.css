@@ -128,7 +128,7 @@ input::placeholder { color: var(--dim); }
 /* Code du salon bien visible : à lire à voix haute ou à taper sur l'accueil */
 .codebox {
   display: grid; justify-items: start; gap: 2px; width: 100%; margin: 6px 0 12px; padding: 12px 16px 14px; text-align: left;
-  background-color: var(--deep); background-image: var(--sheen-soft); border: 3px solid var(--yellow); border-radius: 0; color: var(--paper); cursor: pointer;
+  background-color: var(--deep); border: 3px solid var(--yellow); border-radius: 0; color: var(--paper); cursor: pointer;
   box-shadow: 0 5px 0 var(--yellow-edge);
 }
 .codebox:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--yellow-edge); }
@@ -496,20 +496,12 @@ body.ko-open .reacts { visibility: hidden; }
 .joincode-row .btn { min-height: 0; height: auto; margin-bottom: 8px; padding: 0 16px; font-size: 19px; }
 .joincode-row .btn:active { transform: translateY(7px); }
 
-/* Reflets sur les autres blocs de couleur, pour aller avec les boutons : arête claire en haut + traits en biais. */
-.seat:not(.empty), .scorebug .side.active, .roster .pl.active, .ticker, .rules li::before, .ko-jokers, .toast, .tag.rare {
-  background-image: linear-gradient(#ffffff5c, #ffffff5c), var(--sheen) !important;
-  background-size: 100% 3px, auto !important;
-  background-repeat: no-repeat !important;
-}
-.ticker { background-image: linear-gradient(#ffffff40, #ffffff40), repeating-linear-gradient(105deg, transparent 0 220px, #ffffff1f 220px 250px, transparent 250px 262px, #ffffff14 262px 272px, transparent 272px 520px) !important; background-repeat: no-repeat, repeat !important; }
-.scorebug .side:not(.active), .roster .pl:not(.active), .panel, .card { background-image: var(--sheen-soft); }
 
 /* Récap de fin de partie */
 .recap { margin: 18px auto 4px; max-width: 360px; text-align: left; }
 .sheet .recap-title { max-width: none; margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; }
 .recap-facts { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.recap-facts li { display: grid; gap: 2px; padding: 10px 12px; background-color: var(--night-3); background-image: var(--sheen-soft); box-shadow: 0 3px 0 var(--deep); }
+.recap-facts li { display: grid; gap: 2px; padding: 10px 12px; background-color: var(--night-3); box-shadow: 0 3px 0 var(--deep); }
 .recap-facts b { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1; color: var(--yellow); }
 .recap-facts span { font-size: 13px; color: var(--mute); line-height: 1.3; }
 .recap-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
