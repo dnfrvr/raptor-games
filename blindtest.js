@@ -39,7 +39,10 @@ class BlindRoom extends Room {
     super(io, hostToken, hostName, solo);
     this.mode = 'blind';
     this.settings.turnSeconds = 30;
-    this.settings.target = 10; // un tour peut rapporter 2 points : 10 pour une vraie partie
+    // En manches : la manche se gagne en premier à `points` points, la partie en premier à `target` manches.
+    this.settings.points = 5;
+    this.settings.target = 3;
+    this.mancheNo = 0;
     this.log = [];        // extraits déjà joués (révélés)
     this.usedTracks = new Set();
   }
@@ -48,7 +51,9 @@ class BlindRoom extends Room {
     if (token !== this.hostToken || this.phase !== 'lobby') return;
     if (TURN_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);
     const t = Number(s.target);
-    if (Number.isInteger(t) && t >= 1 && t <= 20) this.settings.target = t;
+    if (Number.isInteger(t) && t >= 1 && t <= 10) this.settings.target = t;
+    const pts = Number(s.points);
+    if (Number.isInteger(pts) && pts >= 2 && pts <= 20) this.settings.points = pts;
     if (this.solo && BOT[s.botLevel]) this.settings.botLevel = s.botLevel;
     this.broadcast();
   }
@@ -57,19 +62,27 @@ class BlindRoom extends Room {
     if (this.players.length < 2 || this.idx(token) < 0) return;
     if (this.phase === 'lobby' && token !== this.hostToken) return;
     if (this.phase !== 'lobby' && this.phase !== 'finished') return;
-    this.players.forEach((p) => { p.score = 0; p.jokers = 0; });
+    this.players.forEach((p) => { p.score = 0; p.jokers = 0; p.pts = 0; });
     this.log = [];
     this.usedTracks = new Set();
     this.final = null;
     this.roundNo = 0;
-    this.phase = 'playing';
-    // L'hôte propose en premier (en solo : le joueur), au joueur suivant.
-    this.newExtract(0);
+    this.mancheNo = 0;
+    this.newManche();
   }
 
-  // Les manches n'existent pas ici : pas d'arrêt entre deux manches.
+  // Nouvelle manche : les points repartent de zéro ; celui qui propose en premier tourne à chaque manche.
+  newManche() {
+    this.mancheNo++;
+    this.players.forEach((p) => { p.pts = 0; });
+    this.phase = 'playing';
+    this.newExtract((this.mancheNo - 1) % this.players.length);
+  }
+  next(token) {
+    if (this.phase !== 'roundEnd' || this.idx(token) < 0) return;
+    this.newManche();
+  }
   stop() {}
-  next() {}
 
   nextPlayer(i) { return (i + 1) % this.players.length; }
   // Pas de chrono pour choisir l'artiste et le son à faire deviner : seulement pour celui qui devine.
@@ -270,7 +283,7 @@ class BlindRoom extends Room {
     r.deadline = null;
     const points = found ? 1 + (found.title ? 1 : 0) : 0;
     const g = this.players[r.guesser];
-    g.score += points;
+    g.pts = (g.pts || 0) + points;
     // Joker de rapidité : artiste trouvé dans le premier quart du chrono (pas pour le bot).
     const ms = Date.now() - (r.guessAt || Date.now());
     const fast = !!found && !g.bot && ms <= this.fastLimit();
@@ -279,10 +292,14 @@ class BlindRoom extends Room {
     r.turn = -1;
     r.result = { points, artist: !!found, title: !!(found && found.title), why: found ? 'found' : why || 'tries', song: found ? found.song : '', fast, ms: found ? ms : null };
     this.log.push({ proposer: r.proposer, guesser: r.guesser, artist: r.artist, track: r.track, points, title: r.result.title, fast, extended: !!r.extended, ms: found ? ms : null });
-    const t = this.settings.target;
-    if (g.score >= t) {
-      this.phase = 'finished';
-      this.final = { stopped: false, winner: r.guesser, recap: this.recap() };
+    // Manche gagnée : premier à `points` points. Partie gagnée : premier à `target` manches.
+    if (g.pts >= this.settings.points) {
+      g.score++;
+      r.winner = r.guesser;
+      if (g.score >= this.settings.target) {
+        this.phase = 'finished';
+        this.final = { stopped: false, winner: r.guesser, recap: this.recap() };
+      } else this.phase = 'roundEnd';
       return this.broadcast();
     }
     this.broadcast();
@@ -327,11 +344,12 @@ class BlindRoom extends Room {
       final: this.final,
       settings: this.settings,
       roundNo: this.roundNo,
-      players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
+      mancheNo: this.mancheNo,
+      players: this.players.map((p) => ({ name: p.name, score: p.score, pts: p.pts || 0, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: r && {
         id: r.id, step: r.step, proposer: r.proposer, guesser: r.guesser, turn: r.turn,
         tries: r.tries, maxTries: r.maxTries, lastError: r.lastError, checking: secret && r.checking ? { hidden: true } : r.checking,
-        result: r.result, out: [], extended: !!r.extended,
+        result: r.result, out: [], extended: !!r.extended, winner: r.winner ?? null,
         artist: secret ? null : r.artist,
         options: me === r.proposer && r.step === 'pick' ? r.options : [],
         query: me === r.proposer ? r.query || '' : '',

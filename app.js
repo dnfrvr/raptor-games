@@ -283,9 +283,17 @@
     $('#settings').classList.toggle('readonly', !isHost);
     $('#settingsSummary').hidden = isHost;
     const blind = S.mode === 'blind';
-    const unit = soloAlone ? 'vie' : blind ? 'point' : 'manche';
-    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    const unit = soloAlone ? 'vie' : 'manche';
+    const pts = S.settings.points || 5;
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
+    $('#pointsSet').hidden = !isHost || !blind;
+    if (isHost && blind) {
+      $('#ptsOut').textContent = plural(pts, 'point');
+      $('#ptsMinus').disabled = pts <= 2; $('#ptsPlus').disabled = pts >= 20;
+      $('#ptsMinus').onclick = () => socket.emit('settings', { points: pts - 1 });
+      $('#ptsPlus').onclick = () => socket.emit('settings', { points: pts + 1 });
+    }
     $('#levelSet').hidden = !isHost || !S.solo || soloAlone;
     $('#targetSet').hidden = !isHost;
     $('#targetSet .field').textContent = soloAlone ? 'Vies' : 'Pour gagner';
@@ -301,7 +309,7 @@
       el.querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { turnSeconds: Number(b.dataset.v) })));
 
       $('#stepper').classList.toggle('off', t === 0);
-      const maxT = soloAlone ? 5 : blind ? 20 : 10;
+      const maxT = soloAlone ? 5 : 10;
       $('#targetOut').textContent = t ? plural(t, unit) : '—';
       $('#targetMinus').disabled = t <= 1;
       $('#targetPlus').disabled = t >= maxT;
@@ -311,7 +319,7 @@
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
-      $('#targetHint').textContent = soloAlone ? `Chaque erreur coûte une vie. ${S.mode === 'bridge' ? 'Relie un maximum de ponts' : 'Fais le plus de bonnes réponses'} avant de toutes les perdre.` : blind ? `Le premier à ${plural(t, 'point')} gagne. Artiste trouvé : +1, titre en plus : +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
+      $('#targetHint').textContent = soloAlone ? `Chaque erreur coûte une vie. ${S.mode === 'bridge' ? 'Relie un maximum de ponts' : 'Fais le plus de bonnes réponses'} avant de toutes les perdre.` : blind ? `Le premier à ${plural(t, 'manche')} gagne. Une manche se gagne en premier à ${plural(pts, 'point')} : artiste trouvé +1, titre en plus +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
     }
 
     $('#startBtn').hidden = !isHost;
@@ -725,13 +733,13 @@
       const pj = el.querySelector('.pj');
       pj.textContent = `🃏 ${p.jokers || 0}`;
       pj.classList.toggle('zero', !p.jokers);
-      el.querySelector('.pscore').textContent = p.score;
+      el.querySelector('.pscore').textContent = p.pts || 0; // points de la manche en cours
       el.classList.toggle('active', actor === i);
       el.classList.toggle('off', !p.online);
       el.classList.toggle('me', i === S.me);
       el.classList.remove('out');
     });
-    $('#roundLabel').textContent = `Extrait ${S.roundNo}, premier à ${plural(S.settings.target, 'point')}`;
+    $('#roundLabel').textContent = `Manche ${S.mancheNo || 1}, premier à ${plural(S.settings.points || 5, 'point')}`;
     $('#muteBtn').hidden = true;
     $('#judgeOverlay').hidden = true;
     $('#ko').hidden = true;
@@ -921,24 +929,28 @@
 
   function renderBlindEnd() {
     const fin = S.phase === 'finished';
+    const ended = fin || S.phase === 'roundEnd';
     const sheet = $('#endSheet');
     const wasHidden = sheet.hidden;
-    sheet.hidden = !fin;
-    document.body.classList.toggle('sheet-open', fin);
-    if (!fin) return;
-    const w = S.final ? S.final.winner : null;
-    $('#endKicker').textContent = 'Fin du blind test';
-    $('#endTitle').textContent = w == null ? 'Égalité' : w === S.me ? 'Tu gagnes le blind test' : `${S.players[w].name} gagne`;
+    sheet.hidden = !ended;
+    document.body.classList.toggle('sheet-open', ended);
+    if (!ended) return;
+    const w = fin && S.final ? S.final.winner : S.round ? S.round.winner : null;
+    const nm = (i) => (i === S.me ? 'Tu' : S.players[i]?.name);
+    $('#endKicker').textContent = fin ? 'Fin du blind test' : `Fin de la manche ${S.mancheNo}`;
+    $('#endTitle').textContent = w == null ? 'Égalité' : fin ? (w === S.me ? 'Tu gagnes le blind test' : `${S.players[w].name} gagne`) : (w === S.me ? 'Manche pour toi' : `Manche pour ${S.players[w].name}`);
     sheet.classList.toggle('win', w === S.me);
-    $('#endText').textContent = w == null ? '' : `${w === S.me ? 'Tu atteins' : S.players[w].name + ' atteint'} ${plural(S.settings.target, 'point')} en ${plural(S.roundNo, 'extrait')}.`;
+    $('#endText').textContent = w == null ? '' : `${nm(w)} ${w === S.me ? 'atteins' : 'atteint'} ${plural(S.settings.points || 5, 'point')}.` + (fin ? '' : ` ${(() => { const s = S.players[S.mancheNo % S.players.length]; return s ? (s.name === S.players[S.me]?.name ? 'Tu fais' : s.name + ' fait') : ''; })()} deviner en premier à la prochaine.`);
     $('#endExamples').hidden = true;
     const N = S.players.length;
     $('#endScore').innerHTML = N === 2
       ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
       : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
-    renderRecap(S.final ? S.final.recap : null);
+    renderRecap(fin && S.final ? S.final.recap : null);
     const btn = $('#endBtn');
-    btn.hidden = false; btn.textContent = 'Revanche'; btn.onclick = () => { unlockAudio(); socket.emit('start'); };
+    btn.hidden = false;
+    if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => { unlockAudio(); socket.emit('start'); }; }
+    else { btn.textContent = 'Manche suivante'; btn.onclick = () => { unlockAudio(); socket.emit('next'); }; }
     $('#stopBtn').hidden = true;
     if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if (w === S.me) sfx.win(); else sfx.out(); }
   }

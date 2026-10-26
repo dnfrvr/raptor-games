@@ -112,6 +112,14 @@
         <span class="field">Chrono par tour</span>
         <div class="chips" id="timerChips" role="radiogroup" aria-label="Chrono par tour"></div>
       </div>
+      <div class="set" id="pointsSet" hidden>
+        <span class="field">Points pour gagner une manche</span>
+        <div class="stepper" id="ptsStepper">
+          <button type="button" class="step" id="ptsMinus" aria-label="Un point de moins">−</button>
+          <output id="ptsOut">5 points</output>
+          <button type="button" class="step" id="ptsPlus" aria-label="Un point de plus">+</button>
+        </div>
+      </div>
       <div class="set" id="targetSet">
         <span class="field">Pour gagner</span>
         <div class="target" id="targetCtl">
