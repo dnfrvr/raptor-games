@@ -176,6 +176,21 @@ class BlindRoom extends Room {
     if (!t) return;
     r.track = t;
     this.usedTracks.add(t.id);
+    // Lien d'extrait expiré (Deezer les signe pour peu de temps) : on le renouvelle avant de lancer l'écoute.
+    if (!deezer.previewOk(t.preview)) {
+      r.step = 'loading';
+      this.broadcast();
+      deezer.freshTrack(t, true).then((ft) => {
+        if (this.round !== r || r.step !== 'loading') return;
+        r.track = { ...t, preview: ft.preview || t.preview };
+        this.startGuess(r);
+      });
+      return;
+    }
+    this.startGuess(r);
+  }
+
+  startGuess(r) {
     r.step = 'guess';
     r.guessAt = Date.now();
     r.extended = false;
@@ -184,7 +199,19 @@ class BlindRoom extends Room {
     r.lastError = null;
     this.resetClock();
     this.broadcast();
-    this.emitAll('extract', { id: r.id, preview: t.preview });
+    this.emitAll('extract', { id: r.id, preview: r.track.preview });
+  }
+
+  // L'extrait ne se lance pas chez un joueur (lien refusé) : on va chercher un lien neuf chez Deezer.
+  async refreshExtract() {
+    const r = this.round;
+    if (!r || r.step !== 'guess' || !r.track || (r.refreshedAt && Date.now() - r.refreshedAt < 5000)) return;
+    r.refreshedAt = Date.now();
+    const ft = await deezer.freshTrack(r.track, true);
+    if (this.round !== r || r.step !== 'guess' || !ft.preview || ft.preview === r.track.preview) return;
+    r.track = { ...r.track, preview: ft.preview };
+    this.broadcast();
+    this.emitAll('extract', { id: r.id, preview: ft.preview, retry: true });
   }
 
   // Le joueur qui propose tape un titre : on cherche ce son chez l'artiste choisi (vide = retour aux plus écoutés).
@@ -360,6 +387,7 @@ class BlindRoom extends Room {
         paused: !r.deadline,
       },
       log: this.log.slice(-30),
+      logTotal: this.log.length,
       serverNow: Date.now(),
     };
   }

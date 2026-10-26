@@ -3,6 +3,7 @@
 // - « Plus ou moins » (fans) : un artiste est affiché avec ses fans Deezer ; le suivant a-t-il plus ou moins de fans ?
 // - « La frise » (timeline) : placer un son au bon endroit sur une frise de dates de sortie qui s'allonge.
 const deezer = require('./deezer');
+const mb = process.env.DEEZER_MOCK ? { firstRelease: async () => null } : require('./musicbrainz');
 const { Room, TURN_CHOICES, FR_RAPPERS } = require('./game');
 
 // Artistes du « Plus ou moins » : rap français + quelques grands noms d'ailleurs, pour des écarts de fans variés.
@@ -48,10 +49,14 @@ class QuizRoom extends Room {
     const top = (await deezer.artistTop(a, 40)).slice(0, 25);
     if (!top.length) return null;
     const t = await deezer.getTrack(rand(top).id);
-    const date = t && (t.release_date || (t.album && t.album.release_date));
+    let date = t && (t.release_date || (t.album && t.album.release_date));
     if (!date || date.startsWith('0000')) return null;
+    let prec = 'day';
+    // Date d'origine (MusicBrainz) si elle est plus ancienne que celle de l'album Deezer (réédition, mise en ligne tardive).
+    const orig = await mb.firstRelease(t.title_short || t.title, a.name);
+    if (orig && orig.date < date) ({ date, prec } = orig);
     const out = deezer.trackOut(t);
-    return { key: 't' + t.id, track: { ...out, artist: a.name, picture: a.picture }, date, base: deezer.norm(out.title).replace(/\s*(feat|ft)\b.*$/, '') };
+    return { key: 't' + t.id, track: { ...out, artist: a.name, picture: a.picture }, date, prec, base: deezer.norm(out.title).replace(/\s*(feat|ft)\b.*$/, '') };
   }
   async fill() {
     if (this.filling) return;
@@ -225,11 +230,12 @@ class QuizRoom extends Room {
     const r = this.round;
     if (v.round && r) {
       // Les fans / la date de la question en cours restent secrets jusqu'à la réponse.
-      const hideNext = r.next && !r.result;
+      // Réponse en cours : secret. Révélée après la réponse, et à la fin de la manche (la date qu'on n'a pas trouvée).
+      const hideNext = r.next && !r.result && this.phase === 'playing';
       v.round.next = !r.next ? null : this.mode === 'fans'
         ? { artist: r.next.artist, fans: hideNext ? null : r.next.fans }
-        : { track: r.next.track, date: hideNext ? null : r.next.date };
-      v.round.items = (r.items || []).map((x) => (this.mode === 'fans' ? { artist: x.artist, fans: x.fans } : { track: x.track, date: x.date }));
+        : { track: r.next.track, date: hideNext ? null : r.next.date, prec: r.next.prec || 'day' };
+      v.round.items = (r.items || []).map((x) => (this.mode === 'fans' ? { artist: x.artist, fans: x.fans } : { track: x.track, date: x.date, prec: x.prec || 'day' }));
       v.round.result = r.result ? { who: r.result.who, ok: r.result.ok, value: r.result.value, slot: r.result.slot, id: r.result.id } : null;
       v.round.chain = r.chain.map(() => ({})); v.round.solution = undefined;
     }

@@ -26,9 +26,10 @@ function setFetcher(fn) { fetcher = fn; }
 // Appels identiques en cours : on attend le même résultat au lieu de relancer (sauf si une préparation en tâche
 // de fond n'a pas encore démarré et qu'un joueur attend : là on passe devant).
 const pending = new Map();
+// opts.maxAge : n'accepte le cache que s'il a moins de maxAge ms (les liens d'extraits audio Deezer expirent vite).
 function get(path, opts = {}) {
   const hit = cache.get(path);
-  if (hit && hit.exp > Date.now()) return Promise.resolve(hit.data);
+  if (hit && hit.exp > Date.now() && (opts.maxAge == null || Date.now() - hit.at < opts.maxAge)) return Promise.resolve(hit.data);
   const p = pending.get(path);
   if (p && (p.started() || opts.low)) return p.promise;
   let job;
@@ -46,7 +47,7 @@ async function fetchPath(path, isLow, onJob) {
     (isLow ? low : high).push(job);
     pump();
   });
-  cache.set(path, { data, exp: Date.now() + TTL });
+  cache.set(path, { data, exp: Date.now() + TTL, at: Date.now() });
   if (cache.size > 8000) cache.delete(cache.keys().next().value);
   try { learnFrom(path, data); } catch (_) { /* jamais bloquant */ }
   return data;
@@ -511,11 +512,17 @@ function knownPartners(a, isUsed = () => false) {
 
 // Extrait audio à jour : les liens d'extraits Deezer expirent ; un son sorti de la mémoire (appris il y a plus d'une
 // heure, ou rechargé après un redémarrage) est relu chez Deezer (un appel, souvent déjà en cache).
-async function freshTrack(track) {
+// Lien d'extrait encore valable ? Deezer signe ses liens avec une date d'expiration (« exp=… » dans l'adresse).
+function previewOk(url, marginS = 120) {
+  if (!url) return false;
+  const m = /exp=(\d{9,})/.exec(url);
+  return !m || Number(m[1]) > Date.now() / 1000 + marginS;
+}
+async function freshTrack(track, force = false) {
   if (!track || !track.id) return track;
-  if (track.preview && track.at && Date.now() - track.at < 3600 * 1000) return track;
+  if (!force && track.preview && previewOk(track.preview)) return track;
   try {
-    const t = await get(`/track/${track.id}`);
+    const t = await get(`/track/${track.id}`, { maxAge: force ? 0 : 5 * 60 * 1000 });
     if (t && t.id) return { ...track, preview: t.preview || null, cover: (t.album && (t.album.cover_medium || t.album.cover)) || track.cover, at: Date.now() };
   } catch (_) { /* on garde le son sans extrait */ }
   return track;
@@ -569,11 +576,12 @@ const memoryStats = () => ({ pairs: featMemo.size, artists: partnerIdx.size, uns
 // Pour les petits artistes, Deezer ne renvoie parfois que 1 ou 2 sons (voire aucun) dans le « top » :
 // on complète alors avec la recherche de son nom et les sons de ses sorties (ceux qui ont un extrait).
 async function artistTop(a, limit = 50) {
-  const top = await get(`/artist/${a.id}/top?limit=${limit}`).catch(() => ({ data: [] }));
+  // Récent (5 min) : les extraits doivent être jouables tout de suite.
+  const top = await get(`/artist/${a.id}/top?limit=${limit}`, { maxAge: 5 * 60 * 1000 }).catch(() => ({ data: [] }));
   let list = (top.data || []).filter((t) => t.preview);
   if (list.length < 8) {
     const [search, own] = await Promise.all([
-      get(`/search?q=${encodeURIComponent(a.name)}&limit=50`).catch(() => ({ data: [] })),
+      get(`/search?q=${encodeURIComponent(a.name)}&limit=50`, { maxAge: 5 * 60 * 1000 }).catch(() => ({ data: [] })),
       list.length < 3 ? albumTracks(a, 8) : Promise.resolve([]),
     ]);
     const mine = (search.data || []).filter((t) => matches(t.artist, a));
@@ -584,7 +592,7 @@ async function artistTop(a, limit = 50) {
 
 // Recherche d'un son précis d'un artiste (blind test : le joueur tape le titre qu'il veut faire deviner).
 async function searchArtistTracks(a, q, limit = 8) {
-  const res = await get(`/search?q=${encodeURIComponent(`${a.name} ${q}`)}&limit=40`);
+  const res = await get(`/search?q=${encodeURIComponent(`${a.name} ${q}`)}&limit=40`, { maxAge: 5 * 60 * 1000 });
   // Seulement les sons dont le titre contient tout ce qui a été tapé (Deezer renvoie aussi des sons approchants).
   const words = norm(q).split(' ').filter(Boolean);
   const hits = (res.data || []).filter((t) => t.preview && words.every((w) => norm(t.title).includes(w)));
@@ -624,4 +632,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { previewOk, getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

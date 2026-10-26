@@ -127,6 +127,8 @@ io.on('connection', (socket) => {
   // Blind test : choisir le son à faire deviner, ou revenir au choix de l'artiste.
   socket.on('bt:pick', act((d) => room.pick && room.pick(token, d.id)));
   socket.on('bt:back', act(() => room.back && room.back(token)));
+  socket.on('br:undo', act(() => room.undo && room.undo(token)));
+  socket.on('bt:refresh', act(() => room.refreshExtract && room.refreshExtract()));
   socket.on('qz:answer', act((d) => room.quizAnswer && room.quizAnswer(token, d.v)));
   socket.on('bt:search', act((d) => room.searchTrack && room.searchTrack(token, d.q)));
   socket.on('leave', () => {

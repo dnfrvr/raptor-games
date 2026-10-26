@@ -1,20 +1,33 @@
-// Le pont : le jeu tire deux rappeurs qui n'ont jamais fait de son ensemble, à 2 feats l'un de l'autre.
-// On joue comme au Roland Gamos (chacun son tour, un feat vérifié sur Deezer à partir du dernier artiste),
-// et celui qui cite le rappeur d'arrivée gagne la manche. Sécher ou dépasser le chrono élimine, comme d'habitude.
+// Le pont : le jeu tire deux rappeurs qui n'ont jamais fait de son ensemble (à 2 feats l'un de l'autre).
+// Tout le monde joue EN MÊME TEMPS, chacun sur sa propre chaîne : partir du rappeur de départ et atteindre
+// celui d'arrivée de feat en feat (chaque feat vérifié sur Deezer). À la fin du chrono (ou quand tout le monde a fini),
+// gagne celui qui est arrivé avec le MOINS de feats ; à égalité, le plus RAPIDE.
+// On peut revenir en arrière (retirer son dernier maillon) ou abandonner le pont.
+// Solo : chaque pont réussi rapporte 1 point, un pont raté coûte une vie.
 const deezer = require('./deezer');
 const { Room, FR_RAPPERS } = require('./game');
 
 const same = (x, y) => !!x && !!y && ((x.id && x.id === y.id) || deezer.norm(x.name) === deezer.norm(y.name));
 const rand = (arr, n = arr.length) => arr[Math.floor(Math.random() * Math.min(n, arr.length))];
+const RACE_CHOICES = [0, 60, 120, 180, 300]; // durée d'un pont (0 = sans limite)
+const SOLO_PAUSE_MS = 4000;
 
 class BridgeRoom extends Room {
   constructor(io, hostToken, hostName, solo = false) {
     super(io, hostToken, hostName, solo);
     this.mode = 'bridge';
     if (solo) this.dropBot();
-    this.settings.turnSeconds = 30; // trouver un chemin demande un peu plus de réflexion
+    this.settings.turnSeconds = 180; // ici : durée totale d'un pont
     this.nextBridge = null;
     this.prepareBridge(); // dès le salon, le premier pont est tiré et ses artistes préparés
+  }
+
+  setSettings(token, s) {
+    if (token !== this.hostToken || this.phase !== 'lobby') return;
+    if (RACE_CHOICES.includes(Number(s.turnSeconds))) this.settings.turnSeconds = Number(s.turnSeconds);
+    const t = Number(s.target);
+    if (Number.isInteger(t) && t >= 1 && t <= 10) this.settings.target = t;
+    this.broadcast();
   }
 
   // Tire deux rappeurs A et B reliés par un intermédiaire X (A–X et X–B ont un son ensemble), sans son A–B direct.
@@ -27,7 +40,6 @@ class BridgeRoom extends Room {
         const c1 = (await deezer.findCollaborators(A, 100)).filter((o) => o.artist.id && !same(o.artist, A));
         if (c1.length < 2) continue;
         const direct = new Set(c1.map((o) => deezer.norm(o.artist.name)));
-        // Plusieurs intermédiaires possibles : on en essaie quelques-uns parmi ses feats les plus connus.
         const vias = c1.slice(0, 15).sort(() => Math.random() - 0.5).slice(0, 4);
         for (const X of vias) {
           const c2 = (await deezer.findCollaborators(X.artist, 100))
@@ -35,97 +47,213 @@ class BridgeRoom extends Room {
           if (!c2.length) continue;
           const B = rand(c2, 12);
           if (deezer.knownFeat(A, B.artist)) continue; // ils ont un son ensemble finalement : pas de pont à construire
-          // Fiche complète de l'arrivée (photo, fans), et préparation des deux bouts en tâche de fond.
           const full = (await deezer.searchArtists(B.artist.name, 5)).find((x) => x.id === B.artist.id) || B.artist;
           deezer.prepare(A); deezer.prepare(full);
-          return { A, B: full, via: X.artist, tracks: [X.track, B.track] };
+          return { A, B: full, via: X.artist, tracks: [X.track, B.track], dist: await this.distances(full) };
         }
       } catch (e) { console.error('bridge', e.message); }
     }
     return null;
   }
+  // Distances jusqu'à l'arrivée (d'après les feats connus sur Deezer) : qui a fait un son avec elle (1 feat),
+  // et qui a fait un son avec l'un d'eux (2 feats). Au-delà : « au moins 3 ».
+  async distances(B) {
+    const n = (x) => deezer.norm(x.name);
+    const t1 = new Map(); // nom → artiste
+    const t2 = new Map(); // nom → intermédiaire (vers l'arrivée)
+    try {
+      const c1 = await deezer.findCollaborators(B, 100);
+      c1.forEach((o) => { if (!same(o.artist, B)) t1.set(n(o.artist), o.artist); });
+      deezer.knownPartners(B).forEach((o) => { if (!t1.has(n(o.artist))) t1.set(n(o.artist), o.artist); });
+      const firsts = [...t1.values()].filter((x) => x.id).slice(0, 20);
+      const lists = await Promise.allSettled(firsts.map((x) => deezer.findCollaborators(x, 100)));
+      lists.forEach((res, k) => {
+        if (res.status !== 'fulfilled') return;
+        for (const o of res.value) {
+          const key = n(o.artist);
+          if (!t1.has(key) && !t2.has(key) && !same(o.artist, B)) t2.set(key, firsts[k]);
+        }
+      });
+    } catch (e) { console.error('bridge dist', e.message); }
+    return { t1, t2 };
+  }
+  // Nombre minimum de feats restants depuis cet artiste (3 = « au moins 3 »).
+  left(r, a) {
+    if (same(a, r.target)) return 0;
+    if (!r.dist) return null;
+    const k = deezer.norm(a.name);
+    return r.dist.t1.has(k) ? 1 : r.dist.t2.has(k) ? 2 : 3;
+  }
+
   async prepareBridge() {
     if (this.loadingBridge || this.nextBridge) return;
     this.loadingBridge = true;
     try { this.nextBridge = await this.makeBridge(); } finally { this.loadingBridge = false; }
   }
 
+  // ---------- Une manche = un pont ----------
   async newRound() {
-    await super.newRound();
-    const r = this.round;
-    r.checking = { artist: { name: 'pont' }, bridge: true };
-    this.pauseClock();
+    clearTimeout(this.timer); clearTimeout(this.soloTimer);
+    this.roundNo++;
+    this.roundSeq = (this.roundSeq || 0) + 1;
+    const r = this.round = {
+      id: this.roundSeq, start: null, target: null, solution: null,
+      lanes: this.players.map(() => ({ chain: [], done: false, doneAt: null, gaveUp: false, checking: false, lastError: null })),
+      startedAt: null, deadline: null, loading: true, winner: null, reason: null, results: null, out: [],
+    };
+    this.phase = 'playing';
     this.broadcast();
     let b = this.nextBridge;
     this.nextBridge = null;
     for (let k = 0; k < 2 && !b && this.round === r; k++) b = await this.makeBridge();
     if (this.round !== r) return;
     setTimeout(() => this.prepareBridge(), 0); // le pont de la manche suivante
-    r.checking = false;
-    if (!b) { r.lastError = { artist: { name: 'Pont' }, why: 'bridge' }; return this.broadcast(); }
-    r.start = b.A;
-    r.target = b.B;
-    r.solution = { via: b.via, tracks: b.tracks };
-    r.chain.push({ artist: b.A, by: r.turn, track: null, random: true, bridge: true });
-    this.resetClock();
+    r.loading = false;
+    if (!b) { r.error = 'bridge'; return this.broadcast(); }
+    r.start = b.A; r.target = b.B; r.solution = { via: b.via, tracks: b.tracks };
+    r.dist = b.dist;
+    r.shortest = this.left(r, b.A); // le plus court chemin possible (2 par construction, sauf feat direct)
+    r.lanes.forEach((l) => l.chain.push({ artist: b.A, track: null }));
+    r.startedAt = Date.now();
+    if (this.settings.turnSeconds) {
+      r.deadline = Date.now() + this.settings.turnSeconds * 1000;
+      this.timer = setTimeout(() => this.finishRound('time'), this.settings.turnSeconds * 1000 + 200);
+    }
     this.broadcast();
   }
 
-  // Pendant l'annonce (pont réussi / raté en solo), plus aucune action jusqu'au pont suivant.
-  paused() { const r = this.round; return !!(r && (r.solved || r.failed)); }
-  answer(token, d) { if (!this.paused()) return super.answer(token, d); }
-  giveUp(token) { if (!this.paused()) return super.giveUp(token); }
-  useJoker(token) { if (!this.paused()) return super.useJoker(token); }
-  timeout() { if (!this.paused()) return super.timeout(); }
-
-  // Le départ est tiré par le jeu : pas de choix d'artiste de départ.
-  randomStart() {}
-
-  // Citer le rappeur d'arrivée (avec un vrai feat) : manche gagnée.
-  accept(a, track, byAppeal) {
+  lane(token) {
+    const i = this.idx(token);
     const r = this.round;
-    if (r.target && same(a, r.target)) {
-      r.chain.push({ artist: a, by: r.turn, track, byAppeal, rare: !byAppeal && !track.joker && !!track.rare, joker: !!track.joker });
-      this.emitAll('link', { track, artist: a });
-      if (this.solo) {
-        // Solo : un pont de plus au compteur, puis le suivant.
+    if (i < 0 || this.phase !== 'playing' || !r || r.loading || r.results || !r.lanes[i]) return null;
+    const l = r.lanes[i];
+    return l.done || l.gaveUp ? null : { i, l, r };
+  }
+
+  async answer(token, { artist, song }) {
+    const ctx = this.lane(token);
+    if (!ctx || ctx.l.checking || !artist || !artist.id || !artist.name) return;
+    const { i, l, r } = ctx;
+    const a = { id: Number(artist.id), name: String(artist.name).slice(0, 80), picture: artist.picture || null };
+    const cur = l.chain[l.chain.length - 1].artist;
+    if (l.chain.some((x) => same(x.artist, a))) { l.lastError = { artist: a, why: 'used' }; return this.broadcast(); }
+    l.checking = { artist: a, song: song ? String(song).slice(0, 100) : '' };
+    l.lastError = null;
+    this.broadcast();
+    let track = null;
+    try { track = await deezer.findFeat(cur, a, song ? String(song).slice(0, 100) : ''); } catch (e) { l.lastError = { artist: a, why: 'api' }; }
+    if (this.round !== r || l.done || l.gaveUp || r.results) return;
+    l.checking = false;
+    if (!track) { if (!l.lastError) l.lastError = { artist: a, why: 'notfound' }; return this.broadcast(); }
+    l.chain.push({ artist: a, track });
+    l.left = this.left(r, a);
+    deezer.prepare(a);
+    if (same(a, r.target)) {
+      l.done = true;
+      l.doneAt = Date.now() - r.startedAt;
+      if (this.solo || r.lanes.every((x) => x.done || x.gaveUp)) return this.finishRound('all');
+    }
+    this.broadcast();
+  }
+
+  // Retirer son dernier maillon (on s'est engagé sur une mauvaise piste).
+  undo(token) {
+    const ctx = this.lane(token);
+    if (!ctx || ctx.l.checking || ctx.l.chain.length < 2) return;
+    ctx.l.chain.pop();
+    ctx.l.left = this.left(ctx.r, ctx.l.chain[ctx.l.chain.length - 1].artist);
+    ctx.l.lastError = null;
+    this.broadcast();
+  }
+
+  // Abandonner ce pont.
+  giveUp(token) {
+    const ctx = this.lane(token);
+    if (!ctx) return;
+    ctx.l.gaveUp = true;
+    ctx.l.checking = false;
+    if (this.solo || ctx.r.lanes.every((x) => x.done || x.gaveUp)) return this.finishRound('all');
+    this.broadcast();
+  }
+
+  // Fin du pont : classement (moins de feats, puis le plus rapide).
+  finishRound(reason) {
+    const r = this.round;
+    if (!r || r.results || this.phase !== 'playing') return;
+    clearTimeout(this.timer);
+    r.deadline = null;
+    const ranking = r.lanes.map((l, i) => ({ i, links: l.chain.length - 1, time: l.doneAt, done: l.done, gaveUp: l.gaveUp }))
+      .sort((x, y) => (y.done - x.done) || (x.done ? x.links - y.links || x.time - y.time : 0));
+    r.results = ranking;
+    r.reason = reason;
+    const best = ranking[0] && ranking[0].done ? ranking[0] : null;
+    r.winner = best ? best.i : null;
+
+    if (this.solo) {
+      // Solo : pont réussi = +1, raté = une vie de moins ; puis le pont suivant.
+      if (best) {
         this.players[0].score++;
-        clearTimeout(this.timer); r.deadline = null;
-        r.solved = { links: r.chain.length - 1 };
         this.broadcast();
-        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, 3500);
+        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, SOLO_PAUSE_MS);
         return;
       }
-      return this.endRound(r.turn, 'bridge');
+      return this.loseLife(reason === 'time' ? 'timeout' : 'giveup', () => {
+        this.broadcast();
+        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, SOLO_PAUSE_MS);
+      });
     }
-    return super.accept(a, track, byAppeal);
+
+    if (best) this.players[best.i].score++;
+    this.history.push({ winner: r.winner, links: best ? best.links : null, time: best ? best.time : null, start: r.start, target: r.target });
+    const done = best && this.players[best.i].score >= this.settings.target;
+    if (done) this.final = { stopped: false, winner: best.i, recap: this.recap() };
+    this.phase = done ? 'finished' : 'roundEnd';
+    this.broadcast();
   }
+
+  timeout() { this.finishRound('time'); }
+  next(token) {
+    if (this.phase !== 'roundEnd' || this.idx(token) < 0) return;
+    this.newRound();
+  }
+  recap() {
+    const H = this.history.filter((h) => h.winner != null);
+    if (!H.length) return null;
+    const shortest = H.reduce((m, h) => (!m || h.links < m.links ? h : m), null);
+    return { bridge: true, rounds: this.history.length, shortest: { links: shortest.links, who: shortest.winner, start: shortest.start.name, target: shortest.target.name } };
+  }
+
+  // Rien de tout ça dans le pont (pas de tour par tour).
+  usedArtist() { return false; } preloadRandom() {}
+  randomStart() {} appeal() {} judge() {} grant() {} useJoker() {} koRelaunch() {} koGiveUp() {} checkKO() {} botTick() {}
+  startClock() {} pauseClock() {} resetClock() {} syncPresence() {}
 
   view(forToken) {
     const v = super.view(forToken);
     v.mode = 'bridge';
-    // Le chemin trouvé par le jeu n'est montré qu'une fois la manche finie.
-    if (v.round && this.phase === 'playing' && !this.round.failed) v.round.solution = undefined;
+    const r = this.round;
+    if (!r) return v;
+    const me = this.idx(forToken);
+    const over = !!r.results || this.phase !== 'playing';
+    const mine = r.lanes[me];
+    v.round = {
+      id: r.id, start: r.start, target: r.target, loading: r.loading, error: r.error || null,
+      winner: r.winner, reason: r.reason, results: r.results,
+      solution: over ? r.solution : null,
+      msLeft: r.deadline ? Math.max(0, r.deadline - Date.now()) : null,
+      paused: !r.deadline, out: [],
+      // Ma chaîne (complète) ; celle des autres reste cachée pendant la course (seulement leur avancée).
+      chain: mine ? mine.chain : [],
+      me: mine ? { done: mine.done, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? r.shortest ?? null } : null,
+      shortest: r.shortest ?? null,
+      checking: mine ? mine.checking : false,
+      lanes: r.lanes.map((l, i) => ({
+        links: l.chain.length - 1, done: l.done, doneAt: l.doneAt, gaveUp: l.gaveUp,
+        chain: over || i === me ? l.chain.map((x) => ({ artist: x.artist, track: x.track })) : null,
+      })),
+    };
     return v;
   }
-
-  // Pas de bot : en solo, on cherche seul le chemin ; sécher ou le chrono = partie perdue.
-  botTick() {}
-  eliminate(i, reason) {
-    // Solo : une vie de moins ; on montre le chemin prévu, puis un nouveau pont.
-    if (this.solo) {
-      const r = this.round;
-      clearTimeout(this.timer); clearTimeout(this.koTimer); r.deadline = null;
-      return this.loseLife(reason, () => {
-        r.failed = { reason };
-        this.broadcast();
-        this.soloTimer = setTimeout(() => { if (this.round === r && this.phase === 'playing') this.newRound(); }, 3500);
-      });
-    }
-    return super.eliminate(i, reason);
-  }
-  // Seul, personne pour valider un feat à la main.
-  appeal(token) { if (!this.solo) return super.appeal(token); }
 }
 
-module.exports = { BridgeRoom };
+module.exports = { BridgeRoom, RACE_CHOICES };

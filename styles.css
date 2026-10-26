@@ -665,3 +665,26 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 #lobby { position: relative; }
 .sheet-body { position: relative; }
 
+/* Rien ne dépasse en largeur (titres longs, noms d'artistes) */
+html, body { overflow-x: hidden; max-width: 100%; }
+.turn, .feedback, .watch, .sheet p, .small, .ex-txt span { overflow-wrap: anywhere; }
+.btn, .chip { overflow-wrap: normal; word-break: keep-all; }
+.current .nm { max-width: 100%; overflow-wrap: anywhere; }
+.track, .bt-opts li, .examples li, .qz-item { min-width: 0; max-width: 100%; }
+.track .tt { min-width: 0; flex: 1; }
+.track .tt b, .track .tt span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain li { min-width: 0; }
+.chain .a { overflow-wrap: anywhere; }
+/* Icônes lecture / pause bien centrées */
+.play-btn { padding: 0; line-height: 0; }
+.play-btn .ico { display: block; }
+.bt-disc span { display: grid; place-items: center; line-height: 0; }
+.br-other { display: block; }
+.br-other + .br-other { margin-top: 4px; }
+/* Le pont : « Valider » en grand, puis « Abandonner » et « Retour » en plus petit en dessous */
+.br-form .play-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.br-form #submitBtn { grid-column: 1 / -1; }
+.br-form #giveupBtn, .br-form #randomBtn { min-height: 44px; font-size: 16px; padding: 8px 10px; }
+.br-form.solo-action #giveupBtn { grid-column: 1 / -1; }
+.br-form #randomBtn { --edge: var(--deep); background-color: var(--night-3); color: var(--paper); }
+

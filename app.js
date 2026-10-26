@@ -231,7 +231,7 @@
       if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
       else toast(S.code);
     };
-    if (S.mode === 'blind') renderBlind(); else if (S.mode === 'fans' || S.mode === 'timeline') renderQuiz(); else renderGame();
+    if (S.mode === 'blind') renderBlind(); else if (S.mode === 'fans' || S.mode === 'timeline') renderQuiz(); else if (S.mode === 'bridge') renderBridge(); else renderGame();
   }
 
   // ================= SALON =================
@@ -287,7 +287,10 @@
     const blind = S.mode === 'blind';
     const unit = soloAlone ? 'vie' : 'manche';
     const pts = S.settings.points || 5;
-    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${S.settings.turnSeconds} s</b> par tour` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    const race = S.mode === 'bridge';
+    const secTxt = (v) => (race ? (v ? `${v / 60} min` : 'Sans limite') : v ? v + ' s' : 'Aucun');
+    $('#timerLabel').textContent = race ? 'Temps pour chaque pont' : 'Chrono par tour';
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#pointsSet').hidden = !isHost || !blind;
     if (isHost && blind) {
@@ -307,7 +310,7 @@
 
     if (isHost) {
       const el = $('#timerChips');
-      el.innerHTML = TIMERS.map((v) => `<button type="button" role="radio" aria-checked="${v === S.settings.turnSeconds}" class="chip ${v === S.settings.turnSeconds ? 'on' : ''}" data-v="${v}">${v ? v + ' s' : 'Aucun'}</button>`).join('');
+      el.innerHTML = (race ? [60, 120, 180, 300, 0] : TIMERS).map((v) => `<button type="button" role="radio" aria-checked="${v === S.settings.turnSeconds}" class="chip ${v === S.settings.turnSeconds ? 'on' : ''}" data-v="${v}">${secTxt(v)}</button>`).join('');
       el.querySelectorAll('button').forEach((b) => (b.onclick = () => socket.emit('settings', { turnSeconds: Number(b.dataset.v) })));
 
       $('#stepper').classList.toggle('off', t === 0);
@@ -356,6 +359,9 @@
   }
 
   function renderGame() {
+    $('#playForm').classList.remove('br-form');
+    $('#randomBtn').textContent = 'Au hasard'; $('#randomBtn').onclick = () => socket.emit('randomStart');
+    $('#goal').hidden = S.mode !== 'bridge';
     $('#btPanel').hidden = true;
     $('#qzPanel').hidden = true;
     $('#chainWrap').hidden = false;
@@ -579,7 +585,21 @@
 
   // ================= PLUS OU MOINS / LA FRISE =================
   const fmtNum = (n) => Number(n || 0).toLocaleString('fr-FR');
-  const fmtDate = (d) => { try { return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
+  // Date précise au jour, au mois ou à l'année (selon ce que MusicBrainz / Deezer savent).
+  const fmtDate = (d, prec = 'day') => {
+    try {
+      const opts = prec === 'year' ? { year: 'numeric' } : prec === 'month' ? { month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' };
+      return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', opts);
+    } catch { return d; }
+  };
+  // La réponse qu'on a ratée, rappelée sur l'écran de fin.
+  const missedLine = (r) => {
+    const n = r && r.next;
+    if (!n) return '';
+    if (S.mode === 'fans' && n.fans != null) return ` ${n.artist.name} avait ${fmtNum(n.fans)} fans.`;
+    if (S.mode === 'timeline' && n.date) return ` « ${n.track.title} » (${n.track.artist || ''}) est sorti ${n.prec === 'year' ? 'en' : 'le'} ${fmtDate(n.date, n.prec)}.`;
+    return '';
+  };
   let qzKey = '', qzResId = null, qzOutKey = '';
 
   function renderQuiz() {
@@ -631,7 +651,7 @@
     banner.className = 'turn ' + (myTurn ? 'me' : 'them');
     if (res) {
       const who = res.who === S.me ? 'Tu' : S.players[res.who]?.name;
-      const truth = fans ? (next && next.fans != null ? `${esc(next.artist.name)} a <b>${fmtNum(next.fans)}</b> fans.` : '') : (next && next.date ? `Sorti le <b>${fmtDate(next.date)}</b>.` : '');
+      const truth = fans ? (next && next.fans != null ? `${esc(next.artist.name)} a <b>${fmtNum(next.fans)}</b> fans.` : '') : (next && next.date ? `Sorti ${next.prec === 'year' ? 'en' : 'le'} <b>${fmtDate(next.date, next.prec)}</b>.` : '');
       banner.innerHTML = res.ok ? `${res.who === S.me ? 'Bien vu' : esc(who) + ' a vu juste'} ! ${truth}` : `${res.value == null ? 'Temps écoulé' : 'Raté'}${res.who === S.me ? '' : ` pour ${esc(who)}`}. ${truth}`;
       banner.className = 'turn ' + (res.ok ? 'me' : 'them');
     } else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
@@ -659,7 +679,7 @@
         let html = '';
         items.forEach((it, k) => {
           html += slot(k) + (mark === k ? '<li class="qz-wrong">Placé ici</li>' : '');
-          html += `<li class="qz-item">${it.track.cover ? `<img src="${esc(it.track.cover)}" alt="">` : '<span class="nocover"></span>'}<span class="qz-y">${esc(fmtDate(it.date))}</span><span class="qz-tt"><b>${esc(it.track.title)}</b><span>${esc(it.track.artist || '')}</span></span></li>`;
+          html += `<li class="qz-item">${it.track.cover ? `<img src="${esc(it.track.cover)}" alt="">` : '<span class="nocover"></span>'}<span class="qz-y">${esc(fmtDate(it.date, it.prec))}</span><span class="qz-tt"><b>${esc(it.track.title)}</b><span>${esc(it.track.artist || '')}</span></span></li>`;
         });
         html += slot(items.length) + (mark === items.length ? '<li class="qz-wrong">Placé ici</li>' : '');
         panel.innerHTML = `<p class="small">${plural(items.length, 'son')} sur la frise, du plus ancien au plus récent.</p><ol class="qz-line">${html}</ol>`;
@@ -705,7 +725,7 @@
     $('#endTitle').textContent = fin ? (w === S.me ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (r.winner === S.me ? 'Manche pour toi' : `Manche pour ${S.players[r.winner].name}`);
     sheet.classList.toggle('win', w === S.me);
     const lo = r.lastOut;
-    $('#endText').textContent = `${lo ? `${lo.who === S.me ? 'Tu t’es trompé' : S.players[lo.who].name + ' s’est trompé'}` : 'Fin'} après une série de ${goodAnswers(streak)}.`;
+    $('#endText').textContent = `${lo ? `${lo.who === S.me ? 'Tu t’es trompé' : S.players[lo.who].name + ' s’est trompé'}` : 'Fin'} après une série de ${goodAnswers(streak)}.${missedLine(r)}`;
     $('#endExamples').hidden = true;
     $('#endScore').innerHTML = N === 2
       ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
@@ -723,7 +743,161 @@
     if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if ((fin ? w : r.winner) === S.me) sfx.win(); else sfx.out(); }
   }
 
+  // ================= LE PONT (course en parallèle) =================
+  const fmtTime = (ms) => { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  let brKey = '', brLen = -1, brErrKey = '', brGiveKey = '', brResKey = '';
+  function renderBridge() {
+    const r = S.round;
+    const N = S.players.length;
+    buildScorebug(N);
+    document.querySelectorAll('#scorebug [data-p]').forEach((el) => {
+      const i = Number(el.dataset.p);
+      const p = S.players[i] || { name: '—', score: 0, online: false };
+      const l = r && r.lanes && r.lanes[i];
+      el.querySelector('.pname').textContent = p.name;
+      el.querySelector('.pj').textContent = l && S.phase === 'playing' ? (l.done ? `✓ ${plural(l.links, 'feat')}` : l.gaveUp ? 'abandon' : `${plural(l.links, 'feat')}`) : '';
+      el.querySelector('.pscore').textContent = p.score;
+      el.classList.toggle('active', i === S.me && S.phase === 'playing');
+      el.classList.toggle('off', !p.online);
+      el.classList.toggle('me', i === S.me);
+      el.classList.remove('out');
+    });
+    if (S.solo) { $('#roundLabel').innerHTML = `Le pont ${hearts()}`; lifeNotice(); }
+    else $('#roundLabel').textContent = `Manche ${S.roundNo}, premier à ${S.settings.target}`;
+    for (const id of ['#muteBtn', '#jokerBtn', '#judgeOverlay', '#ko', '#qzPanel', '#proof']) $(id).hidden = true;
+    $('#chainWrap').hidden = false;
+    if (!r) return;
+
+    const playing = S.phase === 'playing' && !r.results;
+    const me = r.me || {};
+    const mine = r.chain || [];
+    const cur = mine.length ? mine[mine.length - 1].artist : null;
+    const n = Math.max(0, mine.length - 1);
+
+    // --- Scène : mon artiste en cours, et l'arrivée ---
+    const key = `${r.id}-${mine.length}-${r.loading}-${cur ? cur.id : ''}`;
+    if (key !== brKey) {
+      brKey = key;
+      $('#current').innerHTML = r.loading || !cur
+        ? `<span class="av q" aria-hidden="true">?</span><span class="nm q">${r.error ? 'Pas de pont' : 'Préparation du pont'}</span>`
+        : `${avatar(cur)}<span class="nm">${esc(cur.name)}</span>`;
+      $('#current').classList.remove('pop'); void $('#current').offsetWidth; $('#current').classList.add('pop');
+      $('#artistInput').value = ''; $('#songInput').value = ''; pickedArtist = null;
+    }
+    const goal = $('#goal');
+    goal.hidden = !r.target;
+    if (r.target && goal.dataset.id !== String(r.target.id)) {
+      goal.dataset.id = String(r.target.id);
+      goal.innerHTML = `<span class="goal-k">Arrivée</span>${avatar(r.target, 'sm')}<b>${esc(r.target.name)}</b>`;
+    }
+
+    // --- Bandeau ---
+    const banner = $('#turnBanner');
+    banner.hidden = S.phase !== 'playing';
+    const res = r.results;
+    const mineRes = res && res.find((x) => x.i === S.me);
+    banner.className = 'turn ' + (playing && !me.done && !me.gaveUp ? 'me' : 'them');
+    banner.innerHTML = r.loading ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
+      : r.error ? 'Deezer ne répond pas, impossible de tirer un pont.'
+      : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution && r.solution.via ? ` Le jeu passait par <b>${esc(r.solution.via.name)}</b>.` : ''} Pont suivant…`)
+      : me.done ? `Arrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
+      : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
+      : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
+        + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 && r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
+    document.title = playing && !me.done && !me.gaveUp ? '● Le pont | Raptor Games' : 'Raptor Games';
+
+    // --- Formulaire ---
+    const canPlay = playing && !r.loading && !r.error && cur && !me.done && !me.gaveUp;
+    $('#playForm').hidden = !canPlay;
+    $('#playForm').classList.add('br-form');
+    $('#playForm').classList.toggle('solo-action', mine.length < 2);
+    if (canPlay) {
+      const busy = !!me.checking;
+      $('#songInput').hidden = false;
+      $('#songInput').placeholder = 'Titre du son (facultatif)';
+      $('#artistInput').placeholder = `Un artiste qui a fait un son avec ${cur.name}`;
+      $('#submitBtn').textContent = 'Valider';
+      $('#randomBtn').hidden = mine.length < 2;
+      $('#randomBtn').textContent = 'Retour';
+      $('#randomBtn').onclick = () => socket.emit('br:undo');
+      $('#giveupBtn').hidden = false;
+      const gk = `${r.id}`;
+      if (brGiveKey !== gk) { brGiveKey = gk; armTwoTap($('#giveupBtn'), 'Abandonner', 'Sûr ?', () => socket.emit('giveup')); }
+      for (const id of ['#artistInput', '#songInput', '#submitBtn', '#randomBtn', '#giveupBtn']) $(id).disabled = busy;
+      const fb = $('#feedback');
+      if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(me.checking.artist.name)}…`; }
+      else if (me.lastError) {
+        const e = me.lastError;
+        const k = JSON.stringify(e) + mine.length;
+        if (k !== brErrKey) { brErrKey = k; const f = $('#playForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); sfx.buzz(); }
+        fb.hidden = false; fb.className = 'feedback';
+        fb.innerHTML = `<p>${e.why === 'used' ? `<b>${esc(e.artist.name)}</b> est déjà dans ton chemin.` : e.why === 'api' ? 'Deezer ne répond pas, réessaie.' : `Deezer ne trouve aucun son avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>.`}</p>`;
+      } else fb.hidden = true;
+    }
+
+    // --- Avancée des autres (sans montrer leur chemin) ---
+    const others = S.players.map((p, i) => ({ p, i, l: r.lanes && r.lanes[i] })).filter((x) => x.i !== S.me && x.l);
+    $('#watch').hidden = !(playing && others.length);
+    if (playing && others.length) {
+      $('#watch').innerHTML = others.map(({ p, l }) => `<span class="br-other"><b>${esc(p.name)}</b> ${l.done ? `est arrivé en ${plural(l.links, 'feat')} (${fmtTime(l.doneAt)})` : l.gaveUp ? 'a abandonné' : `en est à ${plural(l.links, 'feat')}`}</span>`).join('');
+    }
+
+    // --- Mon chemin ---
+    if (mine.length !== brLen || key !== brKey) {
+      if (mine.length > brLen && brLen > 0 && mine.length > 1) sfx.ding();
+      brLen = mine.length;
+      $('#chainTitle').textContent = mine.length ? `Ton chemin, ${plural(n, 'feat')}` : 'Ton chemin';
+      $('#chain').innerHTML = mine.length ? mine.map((l, i) => `<li class="p${S.me}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${i === 0 ? '<span class="by">départ</span>' : ''}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Ton chemin s'affiche ici.</li>`;
+      bindTracks();
+    }
+    const rk = res ? `${r.id}` : '';
+    if (rk && rk !== brResKey && S.solo) { if (mineRes && mineRes.done) sfx.win(); }
+    brResKey = rk;
+    renderBridgeEnd(r);
+    tickClock();
+  }
+
+  function renderBridgeEnd(r) {
+    if (S.phase === 'finished' && S.final && S.final.solo) return renderSoloEnd(r);
+    const ended = S.phase === 'roundEnd' || S.phase === 'finished';
+    const sheet = $('#endSheet');
+    const wasHidden = sheet.hidden;
+    sheet.hidden = !ended;
+    document.body.classList.toggle('sheet-open', ended);
+    if (!ended) return;
+    const fin = S.phase === 'finished';
+    const w = fin && S.final ? S.final.winner : r.winner;
+    const res = r.results || [];
+    $('#endKicker').textContent = fin ? 'Fin de la partie' : `Fin du pont ${S.roundNo}`;
+    $('#endTitle').textContent = w == null ? 'Personne n’est arrivé' : fin ? (w === S.me ? 'Tu gagnes la partie' : `${S.players[w].name} gagne`) : (w === S.me ? 'Pont pour toi' : `Pont pour ${S.players[w].name}`);
+    sheet.classList.toggle('win', w === S.me);
+    $('#endText').textContent = r.solution && r.solution.via
+      ? `Chemin le plus court : ${r.start ? r.start.name : ''} → ${r.solution.via.name} → ${r.target ? r.target.name : ''} (${plural(r.shortest || 2, 'feat')}).`
+      : `${r.start ? r.start.name : ''} → ${r.target ? r.target.name : ''}.`;
+    const ex = $('#endExamples');
+    ex.hidden = false; ex.dataset.key = '';
+    ex.innerHTML = `<p>Le classement :</p><ul>${res.map((x) => {
+      const lane = r.lanes[x.i];
+      const path = lane && lane.chain ? lane.chain.map((c) => c.artist.name).join(' → ') : '';
+      const st = x.done ? `${plural(x.links, 'feat')} en ${fmtTime(x.time)}` : x.gaveUp ? 'abandon' : 'pas arrivé';
+      return `<li><div class="ex-txt"><b>${esc(S.players[x.i]?.name || '')} · ${st}</b><span>${esc(path)}</span></div></li>`;
+    }).join('')}</ul>`;
+    const N = S.players.length;
+    $('#endScore').innerHTML = N === 2
+      ? `<span class="s p0">${esc(S.players[0].name)}<b>${S.players[0].score}</b></span><span class="s p1"><b>${S.players[1].score}</b>${esc(S.players[1].name)}</span>`
+      : `<ol class="board">${S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score).map(({ p, i }) => `<li class="p${i}${i === S.me ? ' me' : ''}"><span class="dot"></span><span class="nm">${esc(p.name)}</span><b>${p.score}</b></li>`).join('')}</ol>`;
+    $('#endRecap').hidden = true;
+    const btn = $('#endBtn');
+    btn.hidden = false;
+    if (fin) { btn.textContent = 'Revanche'; btn.onclick = () => socket.emit('start'); }
+    else { btn.textContent = 'Pont suivant'; btn.onclick = () => socket.emit('next'); }
+    $('#stopBtn').hidden = true;
+    if (wasHidden) { setTimeout(() => btn.focus({ preventScroll: true }), 60); if (w === S.me) sfx.win(); else sfx.out(); }
+  }
+
   function renderBlind() {
+    $('#playForm').classList.remove('br-form');
+    $('#randomBtn').onclick = () => socket.emit('randomStart');
     const r = S.round;
     const N = S.players.length;
     buildScorebug(N);
@@ -791,6 +965,7 @@
     banner.innerHTML = r.step === 'reveal'
       ? (res && res.points ? `${r.guesser === S.me ? 'Tu trouves' : esc(gues) + ' trouve'} ${res.title ? 'l’artiste et le titre' : 'l’artiste'} : <b>+${res.points}</b>${res.ms != null ? ` en ${(res.ms / 1000).toFixed(1).replace('.', ',')} s` : ''}${res.fast ? ' et un joker 🃏' : ''}`
         : res && res.why === 'timeout' ? 'Temps écoulé : personne ne marque.' : res && res.why === 'pass' ? `${r.guesser === S.me ? 'Tu passes' : esc(gues) + ' passe'} : personne ne marque.` : 'Raté : personne ne marque.')
+      : r.step === 'loading' ? '<span class="spin"></span>Chargement de l’extrait…'
       : r.step === 'guess'
         ? (iGuess ? `À toi : <b>quel artiste chante ?</b><span class="bt-fast">Trouve en moins de ${S.fastSeconds} s : +1 joker</span>` : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
         : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b> : choisis un artiste.`)
@@ -907,9 +1082,10 @@
 
     // --- Historique des extraits, le plus récent en haut ---
     const log = S.log || [];
-    if (log.length !== btLogLen) {
-      btLogLen = log.length;
-      $('#chainTitle').textContent = log.length ? `Les extraits, ${log.length}` : 'Les extraits';
+    const logTotal = S.logTotal ?? log.length;
+    if (logTotal !== btLogLen) {
+      btLogLen = logTotal;
+      $('#chainTitle').textContent = logTotal ? `Les extraits, ${logTotal}` : 'Les extraits';
       $('#chain').innerHTML = log.length ? log.map((l) => {
         const pts = (l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>') + (l.fast ? ' <span class="tag">Rapide</span>' : '') + (l.extended ? ' <span class="tag">Joker</span>' : '');
         return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
@@ -1104,7 +1280,7 @@
     const why = r.reason === 'timeout' ? 'Temps écoulé' : r.reason === 'ko' ? 'K.O., plus aucun feat possible' : r.reason === 'giveup' ? 'Tu as séché' : r.reason === 'tries' ? 'Plus d’essais' : 'Mauvaise réponse';
     $('#endText').textContent = (bridge
       ? `${f.count ? `${plural(f.count, 'pont')} réussi${f.count > 1 ? 's' : ''}` : 'Aucun pont réussi'} avec ${plural(S.settings.target || 3, 'vie')}. Dernier pont : ${why.toLowerCase()}, il fallait rejoindre ${r.target ? r.target.name : ''}.` + (r.solution && r.solution.via ? ` Le jeu passait par ${r.solution.via.name}.` : '')
-      : `${goodAnswers(f.count)} avec ${plural(S.settings.target || 3, 'vie')}.`);
+      : `${goodAnswers(f.count)} avec ${plural(S.settings.target || 3, 'vie')}.${missedLine(r)}`);
     $('#endExamples').hidden = true;
     $('#endScore').innerHTML = f.best != null && f.plays > 1
       ? `<p class="solo-best">Record de la session : <b>${f.best}</b></p>` : '';
@@ -1317,6 +1493,10 @@
     if (d) { const on = !audio.paused && audio.dataset.src === d.dataset.prev; d.classList.toggle('on', on); d.firstElementChild.innerHTML = on ? PAUSE : PLAY; }
   }
   ['play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, syncPlayButtons));
+  // Extrait refusé par le navigateur (lien Deezer expiré) : on demande un lien neuf au serveur.
+  audio.addEventListener('error', () => {
+    if (S && S.mode === 'blind' && S.round && S.round.step === 'guess' && audio.dataset.src && S.round.track && audio.dataset.src === S.round.track.preview) socket.emit('bt:refresh');
+  });
   // Interrupteurs du menu réglages (roue) : aria-pressed = activé.
   function syncMute() {
     $('#muteBtn').setAttribute('aria-pressed', String(!muted));
