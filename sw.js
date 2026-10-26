@@ -1,7 +1,7 @@
 // Garde le jeu sur le téléphone : l'accueil s'ouvre tout de suite, même quand le serveur gratuit dort.
 // __VERSION__ est remplacé par le serveur : chaque mise à jour du jeu crée un nouveau cache.
 const CACHE = 'rg-__VERSION__';
-const SHELL = ['/', '/app.js?v=__VERSION__', '/styles.css?v=__VERSION__', '/socket.io/socket.io.js', '/confetti.js', '/rex.webp', '/rex-win.webp', '/rex-sad.webp', '/leaf-monstera.webp', '/leaf-banana.webp', '/vine.webp', '/jungle-bg.webp', '/favicon-32.png', '/apple-touch-icon.png', '/icon-192.png'];
+const SHELL = ['/', '/app.js?v=__VERSION__', '/styles.css?v=__VERSION__', '/socket.io/socket.io.js', '/confetti.js', '/rex.webp', '/rex-win.webp', '/rex-sad.webp', '/jungle-bg.webp', '/favicon-32.png', '/apple-touch-icon.png', '/icon-192.png'];
 const NAV_TIMEOUT = 2500; // au-delà, on affiche la version gardée en attendant le réveil du serveur
 
 self.addEventListener('install', (e) => {

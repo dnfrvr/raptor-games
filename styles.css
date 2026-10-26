@@ -635,11 +635,6 @@ body {
 .logo-raptor { width: 168px; height: 168px; margin: -6px auto -10px; filter: drop-shadow(0 8px 0 #06120966); animation: rexIn .7s cubic-bezier(.2,1.6,.4,1) both, rexBob 3.2s ease-in-out .8s infinite; transform-origin: 50% 100%; }
 @keyframes rexIn { from { transform: translateY(40px) scale(.3); opacity: 0; } }
 @keyframes rexBob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-2deg); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(-3px) rotate(2deg); } }
-.leaf { position: absolute; width: 78px; height: auto; top: 6px; opacity: .45; filter: saturate(.75); pointer-events: none; }
-.leaf-l { left: -36px; transform: rotate(-38deg); animation: sway 5s ease-in-out infinite; transform-origin: 50% 96%; }
-.leaf-r { right: -40px; top: 90px; width: 70px; transform: rotate(18deg); animation: swayR 6s ease-in-out infinite; transform-origin: 20% 96%; }
-@keyframes sway { 50% { transform: rotate(-30deg); } }
-@keyframes swayR { 50% { transform: rotate(26deg); } }
 .logo h1 span { text-shadow: 0 6px 0 #1f7a3c, 0 12px 0 var(--deep); }
 .lobby-raptor { float: right; width: 92px; height: 92px; margin: 2px -6px 0 8px; animation: rexBob 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
 .sheet-raptor { width: 96px; height: 96px; margin: -4px auto -4px; filter: drop-shadow(0 5px 0 #06120999); }
@@ -662,14 +657,11 @@ body {
 .modes .chip.on { --edge: var(--yellow-edge); background-color: var(--yellow); color: #1a1400; box-shadow: 0 var(--d) 0 var(--edge), inset 0 2px 0 #fff8, inset 0 -2px 0 #0002; }
 
 @media (prefers-reduced-motion: reduce) {
-  .logo-raptor, .lobby-raptor, .sheet-raptor, .leaf, .wake-raptor { animation: none !important; }
+  .logo-raptor, .lobby-raptor, .sheet-raptor, .wake-raptor { animation: none !important; }
 }
 /* Décor jungle, volontairement discret : motif de fond très pâle, liane en haut du salon */
 body { isolation: isolate; }
 body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: url("/jungle-bg.webp") 0 0 / 300px 300px; opacity: .18; }
 #lobby { position: relative; }
-.vine { display: block; width: 62%; height: auto; margin: -14px 0 -22px auto; opacity: .45; filter: saturate(.75); pointer-events: none; }
 .sheet-body { position: relative; }
-.sheet-leaves { display: none; }
-@media (prefers-reduced-motion: reduce) { .vine, .sheet-leaves { animation: none !important; } }
 
