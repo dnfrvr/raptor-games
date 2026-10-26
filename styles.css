@@ -689,7 +689,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .br-other { display: block; }
 .br-other + .br-other { margin-top: 4px; }
 /* Le pont : « Valider » en grand, puis « Abandonner » et « Retour » en plus petit en dessous */
-.br-form .play-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.br-form .play-row { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; row-gap: 22px; } /* la tranche du bouton du dessus prend 8 px */
 .br-form #submitBtn { grid-column: 1 / -1; }
 .br-form #giveupBtn, .br-form #randomBtn { min-height: 44px; font-size: 16px; padding: 8px 10px; }
 .br-form.solo-action #giveupBtn { grid-column: 1 / -1; }
