@@ -614,7 +614,7 @@ body {
     radial-gradient(circle at 10% 4%, #ffd21f1f 0, transparent 30%),
     radial-gradient(circle at 96% 42%, #43b85c26 0, transparent 34%),
     radial-gradient(circle at 0% 88%, #2fae4f1c 0, transparent 30%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%23ffffff' fill-opacity='.035'%3E%3Cpath d='M20 50 C18 40 8 37 6 28 C4 19 11 11 20 8 C29 11 36 19 34 28 C32 37 22 40 20 50 Z' transform='rotate(-25 20 30)'/%3E%3Cpath d='M86 112 C84 102 74 99 72 90 C70 81 77 73 86 70 C95 73 102 81 100 90 C98 99 88 102 86 112 Z' transform='rotate(35 86 92)'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 120px 120px,
+    url("/jungle-bg.webp") 0 0 / 280px 280px,
     linear-gradient(180deg, #10301f, var(--night) 55%, #08190f);
   background-attachment: fixed;
 }
@@ -636,11 +636,11 @@ body {
 .logo-raptor { width: 168px; height: 168px; margin: -6px auto -10px; filter: drop-shadow(0 8px 0 #06120966); animation: rexIn .7s cubic-bezier(.2,1.6,.4,1) both, rexBob 3.2s ease-in-out .8s infinite; transform-origin: 50% 100%; }
 @keyframes rexIn { from { transform: translateY(40px) scale(.3); opacity: 0; } }
 @keyframes rexBob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-2deg); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(-3px) rotate(2deg); } }
-.leaf { position: absolute; width: 96px; height: 96px; top: 10px; opacity: .95; filter: drop-shadow(0 6px 0 #06120980); pointer-events: none; }
+.leaf { position: absolute; width: 104px; height: auto; top: 0; filter: drop-shadow(0 6px 0 #06120980); pointer-events: none; }
 .leaf-l { left: -30px; transform: rotate(-38deg); animation: sway 5s ease-in-out infinite; transform-origin: 50% 96%; }
-.leaf-r { right: -30px; top: 70px; width: 80px; height: 80px; transform: rotate(32deg) scaleX(-1); animation: swayR 6s ease-in-out infinite; transform-origin: 50% 96%; }
+.leaf-r { right: -34px; top: 60px; width: 96px; transform: rotate(18deg); animation: swayR 6s ease-in-out infinite; transform-origin: 20% 96%; }
 @keyframes sway { 50% { transform: rotate(-30deg); } }
-@keyframes swayR { 50% { transform: rotate(40deg) scaleX(-1); } }
+@keyframes swayR { 50% { transform: rotate(26deg); } }
 .logo h1 span { text-shadow: 0 6px 0 #1f7a3c, 0 12px 0 var(--deep); }
 .lobby-raptor { float: right; width: 92px; height: 92px; margin: 2px -6px 0 8px; animation: rexBob 3.4s ease-in-out infinite; transform-origin: 50% 100%; }
 .sheet-raptor { width: 96px; height: 96px; margin: -4px auto -4px; filter: drop-shadow(0 5px 0 #06120999); }
@@ -665,4 +665,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .logo-raptor, .lobby-raptor, .sheet-raptor, .leaf, .wake-raptor { animation: none !important; }
 }
+/* Décor jungle : liane en haut du salon, bouquet de feuilles sur l'écran de fin */
+#lobby { position: relative; }
+.vine { display: block; width: calc(100% + 32px); max-width: none; height: auto; margin: -10px -16px -18px; pointer-events: none; filter: drop-shadow(0 5px 0 #06120980); }
+.sheet-body { position: relative; }
+.sheet-leaves { position: absolute; top: 4px; right: 2px; width: 84px; height: auto; transform: rotate(12deg); pointer-events: none; filter: drop-shadow(0 4px 0 #06120980); }
+@media (prefers-reduced-motion: reduce) { .vine, .sheet-leaves { animation: none !important; } }
 

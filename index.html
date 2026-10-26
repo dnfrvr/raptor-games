@@ -20,12 +20,8 @@
   <meta name="apple-mobile-web-app-title" content="Raptor Games">
 </head>
 <body>
-  <!-- Feuilles (dessin original) et icônes Lucide (licence ISC), réutilisées avec <use>. Rex, la mascotte, est en images (rex*.webp). -->
+  <!-- Icônes Lucide (licence ISC), réutilisées avec <use>. Rex et les feuilles sont en images (rex*.webp, leaf-*.webp, vine.webp). -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <symbol id="i-leaf" viewBox="0 0 100 100"><path d="M50 96 C46 80 20 74 14 52 C8 30 24 10 50 4 C76 10 92 30 86 52 C80 74 54 80 50 96 Z" fill="#2f9a49"/>
-  <path d="M50 92 L50 10" stroke="#1b5e31" stroke-width="3" stroke-linecap="round"/>
-  <path d="M50 30 L30 20 M50 46 L24 38 M50 62 L30 58 M50 30 L70 20 M50 46 L76 38 M50 62 L70 58" stroke="#1b5e31" stroke-width="2.4" stroke-linecap="round"/>
-  <path d="M14 52 L28 50 M86 52 L72 50 M20 30 L32 34 M80 30 L68 34" stroke="#0c2216" stroke-width="4" stroke-linecap="round"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
   <circle cx="12" cy="12" r="3" /></symbol>
     <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" />
@@ -48,8 +44,8 @@
   <main id="home" class="screen">
     <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
     <header class="logo">
-      <svg class="leaf leaf-l" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-leaf"/></svg>
-      <svg class="leaf leaf-r" viewBox="0 0 100 100" aria-hidden="true"><use href="#i-leaf"/></svg>
+      <img class="leaf leaf-l" src="/leaf-monstera.webp" alt="" width="203" height="224">
+      <img class="leaf leaf-r" src="/leaf-banana.webp" alt="" width="233" height="238">
       <img class="raptor logo-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
       <h1><span>Raptor</span><span class="o">Games</span></h1>
       <p class="pitch" id="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
@@ -114,6 +110,7 @@
       <button class="link" data-leave type="button">Quitter</button>
     </div>
 
+    <img class="vine" src="/vine.webp" alt="" width="953" height="232">
     <img class="raptor lobby-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
     <section class="invite" id="invite">
       <h2 class="lobby-title" id="lobbyTitle">Invite ton adversaire</h2>
@@ -231,6 +228,7 @@
   <!-- FIN DE MANCHE : feuille en bas, la chaîne reste visible au-dessus -->
   <div class="sheet" id="endSheet" hidden role="dialog" aria-labelledby="endTitle">
     <div class="sheet-body">
+      <img class="sheet-leaves" src="/leaf-bunch.webp" alt="" width="212" height="236">
       <img class="raptor sheet-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
       <p class="small" id="endKicker"></p>
       <h2 id="endTitle"></h2>
