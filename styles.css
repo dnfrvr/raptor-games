@@ -614,7 +614,6 @@ body {
     radial-gradient(circle at 10% 4%, #ffd21f1f 0, transparent 30%),
     radial-gradient(circle at 96% 42%, #43b85c26 0, transparent 34%),
     radial-gradient(circle at 0% 88%, #2fae4f1c 0, transparent 30%),
-    url("/jungle-bg.webp") 0 0 / 280px 280px,
     linear-gradient(180deg, #10301f, var(--night) 55%, #08190f);
   background-attachment: fixed;
 }
@@ -636,9 +635,9 @@ body {
 .logo-raptor { width: 168px; height: 168px; margin: -6px auto -10px; filter: drop-shadow(0 8px 0 #06120966); animation: rexIn .7s cubic-bezier(.2,1.6,.4,1) both, rexBob 3.2s ease-in-out .8s infinite; transform-origin: 50% 100%; }
 @keyframes rexIn { from { transform: translateY(40px) scale(.3); opacity: 0; } }
 @keyframes rexBob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-2deg); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(-3px) rotate(2deg); } }
-.leaf { position: absolute; width: 104px; height: auto; top: 0; filter: drop-shadow(0 6px 0 #06120980); pointer-events: none; }
-.leaf-l { left: -30px; transform: rotate(-38deg); animation: sway 5s ease-in-out infinite; transform-origin: 50% 96%; }
-.leaf-r { right: -34px; top: 60px; width: 96px; transform: rotate(18deg); animation: swayR 6s ease-in-out infinite; transform-origin: 20% 96%; }
+.leaf { position: absolute; width: 78px; height: auto; top: 6px; opacity: .45; filter: saturate(.75); pointer-events: none; }
+.leaf-l { left: -36px; transform: rotate(-38deg); animation: sway 5s ease-in-out infinite; transform-origin: 50% 96%; }
+.leaf-r { right: -40px; top: 90px; width: 70px; transform: rotate(18deg); animation: swayR 6s ease-in-out infinite; transform-origin: 20% 96%; }
 @keyframes sway { 50% { transform: rotate(-30deg); } }
 @keyframes swayR { 50% { transform: rotate(26deg); } }
 .logo h1 span { text-shadow: 0 6px 0 #1f7a3c, 0 12px 0 var(--deep); }
@@ -665,10 +664,12 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .logo-raptor, .lobby-raptor, .sheet-raptor, .leaf, .wake-raptor { animation: none !important; }
 }
-/* Décor jungle : liane en haut du salon, bouquet de feuilles sur l'écran de fin */
+/* Décor jungle, volontairement discret : motif de fond très pâle, liane en haut du salon */
+body { isolation: isolate; }
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: url("/jungle-bg.webp") 0 0 / 300px 300px; opacity: .18; }
 #lobby { position: relative; }
-.vine { display: block; width: calc(100% + 32px); max-width: none; height: auto; margin: -10px -16px -18px; pointer-events: none; filter: drop-shadow(0 5px 0 #06120980); }
+.vine { display: block; width: 62%; height: auto; margin: -14px 0 -22px auto; opacity: .45; filter: saturate(.75); pointer-events: none; }
 .sheet-body { position: relative; }
-.sheet-leaves { position: absolute; top: 4px; right: 2px; width: 84px; height: auto; transform: rotate(12deg); pointer-events: none; filter: drop-shadow(0 4px 0 #06120980); }
+.sheet-leaves { display: none; }
 @media (prefers-reduced-motion: reduce) { .vine, .sheet-leaves { animation: none !important; } }
 

@@ -42,7 +42,7 @@ app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
 // Rex, la mascotte (3 humeurs), et le décor jungle (feuilles, liane, motif de fond).
-for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp', 'leaf-monstera.webp', 'leaf-banana.webp', 'leaf-bunch.webp', 'vine.webp', 'jungle-bg.webp']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
+for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp', 'leaf-monstera.webp', 'leaf-banana.webp', 'vine.webp', 'jungle-bg.webp']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
 // Confettis de victoire (canvas-confetti 1.9.3, licence ISC), servis depuis le dépôt.
 app.get('/confetti.js', (_, res) => res.sendFile(path.join(__dirname, 'confetti.js'), { maxAge: '30d' }));
 // Icônes (onglet du navigateur, écran d'accueil iOS/Android) et fiche d'application installable.
