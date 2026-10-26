@@ -546,3 +546,23 @@ body.ko-open .reacts { visibility: hidden; }
 .roundline .toggles .link { padding: 6px 0; }
 #quitBtn.confirm { color: var(--yellow); }
 
+/* Roue des réglages + Quitter, à droite de la ligne de la manche */
+.roundline { position: relative; flex-wrap: nowrap; }
+.roundline .toggles { align-items: center; gap: 10px; }
+.gear { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--mute); cursor: pointer; }
+.gear svg { width: 22px; height: 22px; fill: currentColor; transition: transform .25s; }
+.gear.on { color: var(--paper); }
+.gear.on svg { transform: rotate(60deg); }
+.gear-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 250px; padding: 6px;
+  background: var(--paper); color: var(--night); box-shadow: 0 5px 0 #a9b6d9, 0 20px 40px #000a;
+  display: grid; gap: 2px; animation: bounceIn .25s cubic-bezier(.2,1.4,.4,1) both;
+}
+.gear-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 46px; padding: 8px 10px; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; font-size: 15px; text-align: left; cursor: pointer; }
+.gear-row:active { background: #e8ecf8; }
+.gear-row .sw { position: relative; flex: none; width: 42px; height: 24px; background: #b9c3e0; transition: background .15s; }
+.gear-row .sw::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; background: #fff; box-shadow: 0 2px 0 #0003; transition: transform .15s; }
+.gear-row[aria-pressed="true"] .sw { background: var(--red); }
+.gear-row[aria-pressed="true"] .sw::after { transform: translateX(18px); }
+
+.gear-row[hidden] { display: none; }

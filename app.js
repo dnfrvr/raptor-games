@@ -1074,9 +1074,9 @@
     if (d) { const on = !audio.paused && audio.dataset.src === d.dataset.prev; d.classList.toggle('on', on); d.firstElementChild.textContent = on ? '❚❚' : '▶'; }
   }
   ['play', 'pause', 'ended'].forEach((ev) => audio.addEventListener(ev, syncPlayButtons));
+  // Interrupteurs du menu réglages (roue) : aria-pressed = activé.
   function syncMute() {
-    $('#muteBtn').textContent = muted ? 'Lecture auto : non' : 'Lecture auto : oui';
-    $('#muteBtn').setAttribute('aria-pressed', String(muted));
+    $('#muteBtn').setAttribute('aria-pressed', String(!muted));
   }
   syncMute();
   $('#muteBtn').onclick = () => { muted = !muted; store.set('rg_autoplay', muted ? '0' : '1'); if (muted) audio.pause(); syncMute(); };
@@ -1135,9 +1135,14 @@
   })();
   document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
   function syncSfx() {
-    $('#sfxBtn').textContent = sfx.on ? 'Effets : oui' : 'Effets : non';
     $('#sfxBtn').setAttribute('aria-pressed', String(sfx.on));
   }
+  // Roue des réglages : petit menu sous la ligne de la manche, fermé en touchant ailleurs.
+  const gearMenu = $('#gearMenu'), gearBtn = $('#gearBtn');
+  const setGear = (open) => { gearMenu.hidden = !open; gearBtn.setAttribute('aria-expanded', String(open)); gearBtn.classList.toggle('on', open); };
+  gearBtn.onclick = (e) => { e.stopPropagation(); setGear(gearMenu.hidden); };
+  document.addEventListener('click', (e) => { if (!gearMenu.hidden && !gearMenu.contains(e.target) && e.target !== gearBtn) setGear(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setGear(false); });
   $('#sfxBtn').onclick = () => { sfx.toggle(); syncSfx(); };
   syncSfx();
 
