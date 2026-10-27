@@ -307,7 +307,7 @@
     const race = S.mode === 'bridge';
     const secTxt = (v) => (race ? (v ? `${v / 60} min` : 'Sans limite') : v ? v + ' s' : 'Aucun');
     $('#timerLabel').textContent = race ? 'Temps pour chaque pont' : 'Chrono par tour';
-    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}${race ? ', ponts de 2 à 6 feats tirés au hasard' : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}${race ? ', ponts de 2 à 4 feats entre artistes connus' : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#pointsSet').hidden = !isHost || !blind;
     if (isHost && blind) {
@@ -827,7 +827,7 @@
       : me.done ? `${me.auto && mine.length > 2 ? `<b>${esc(mine[mine.length - 2].artist.name)}</b> a un son avec <b>${esc(r.target.name)}</b> : ` : 'A'}${me.auto && mine.length > 2 ? 'a' : ''}rrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
       : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
-        + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
+        + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.level === 'hard' ? 'Pont difficile. ' : '') + (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
     armRetry(banner);
     document.title = playing && !me.done && !me.gaveUp ? '● Le pont | Raptor Games' : 'Raptor Games';
 
