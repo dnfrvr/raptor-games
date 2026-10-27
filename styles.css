@@ -697,3 +697,30 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* Les compteurs +/− prennent la largeur de leur contenu, pas toute la ligne */
 .stepper { width: fit-content; max-width: 100%; }
 
+
+/* Le pont : célébration quand on arrive (éclats qui tournent, mots qui tombent, la chaîne qui se construit) */
+.brwin { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; overflow: hidden; cursor: pointer;
+  background: radial-gradient(circle at 50% 40%, #1f6b38f2 0, #0a2615f5 55%, #061209fa 100%); }
+.brwin.out { animation: brOut .35s ease-in forwards; }
+.brwin-burst { position: absolute; left: 50%; top: 34%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, #ffd21f1c 0deg 7deg, transparent 7deg 18deg, #43b85c18 18deg 24deg, transparent 24deg 36deg);
+  animation: koBurstIn .5s ease-out both, koSpin 16s linear infinite; }
+.brwin-inner { position: relative; text-align: center; width: 100%; max-width: 460px; }
+.brwin-rex { display: block; width: 132px; height: 132px; margin: 0 auto 4px; filter: drop-shadow(0 8px 0 #06120966); animation: brRex .6s cubic-bezier(.2, 1.6, .4, 1) both; }
+.brwin-word { margin: 0; font-family: var(--display); font-weight: 400; text-transform: uppercase; line-height: .88; font-size: clamp(56px, 17vw, 96px); display: grid; }
+.brwin-word span { display: block; color: var(--paper); text-shadow: 0 6px 0 #1f7a3c, 0 12px 0 var(--deep); animation: koSlam .42s .1s cubic-bezier(.2, 1.6, .35, 1) both; }
+.brwin-word span + span { color: var(--yellow); text-shadow: 0 6px 0 var(--yellow-edge), 0 12px 0 var(--deep), 0 0 40px #ffd21f66; animation-delay: .26s; }
+.brwin-path { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 6px; }
+.brwin-path li { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; color: var(--paper);
+  opacity: 0; animation: koFadeUp .3s ease-out forwards; animation-delay: calc(.55s + var(--i) * .16s); }
+.brwin-path li b { padding: 6px 10px; background: var(--night-3); border: 2px solid var(--line); }
+.brwin-path li.end b { background: var(--yellow); border-color: var(--yellow-edge); color: var(--night); }
+.brwin-path li + li::before { content: ""; width: 14px; height: 3px; background: var(--yellow); }
+.brwin-sub { margin: 20px 0 0; font-size: 18px; color: var(--paper); opacity: 0; animation: koFadeUp .35s ease-out forwards; animation-delay: calc(.7s + var(--n, 3) * .16s); }
+.brwin-sub b { color: var(--yellow); }
+.brwin-sub .plus { display: inline-block; margin-left: 6px; font-family: var(--display); font-size: 26px; color: var(--yellow); }
+@keyframes brRex { from { transform: translateY(40px) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes brOut { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .brwin-burst, .brwin-rex, .brwin-word span, .brwin-path li, .brwin-sub { animation: none !important; opacity: 1 !important; }
+}

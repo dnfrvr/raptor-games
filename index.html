@@ -43,7 +43,7 @@
     <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1" />
   <rect x="6" y="4" width="4" height="16" rx="1" /></symbol>
-    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></symbol>
     <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
     <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
   <polyline points="16 17 21 12 16 7" />
@@ -249,6 +249,15 @@
   </div>
 
   <!-- K.O. : plus aucun feat possible -->
+  <div class="brwin" id="brWin" hidden role="status" aria-live="assertive">
+    <div class="brwin-burst" aria-hidden="true"></div>
+    <div class="brwin-inner">
+      <img class="brwin-rex" src="/rex-win.webp" alt="" width="132" height="132" decoding="async">
+      <h2 class="brwin-word"><span>Pont</span><span>réussi !</span></h2>
+      <ol class="brwin-path" id="brWinPath"></ol>
+      <p class="brwin-sub" id="brWinSub"></p>
+    </div>
+  </div>
   <div class="ko" id="ko" hidden role="alertdialog" aria-labelledby="koWord" aria-describedby="koSub">
     <div class="ko-flash" aria-hidden="true"></div>
     <div class="ko-burst" aria-hidden="true"></div>

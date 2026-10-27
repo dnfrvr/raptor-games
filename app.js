@@ -770,6 +770,31 @@
   const solPath = (r) => (r.solution && r.solution.path ? r.solution.path.map((x) => x.name).join(' → ') : r.solution && r.solution.via ? `${r.start ? r.start.name : ''} → ${r.solution.via.name} → ${r.target ? r.target.name : ''}` : '');
   const fmtTime = (ms) => { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   let brKey = '', brLen = -1, brErrKey = '', brGiveKey = '', brResKey = '';
+  let brPrev = { id: null, done: false }, brWinTimer = null;
+  function celebrateBridge(r, me, mine) {
+    const el = $('#brWin');
+    const names = mine.map((c) => c.artist.name);
+    if (r.target && names[names.length - 1] !== r.target.name) names.push(r.target.name);
+    const links = names.length - 1;
+    el.style.setProperty('--n', names.length);
+    $('#brWinPath').innerHTML = names.map((nm, k) => `<li style="--i:${k}"${k === names.length - 1 ? ' class="end"' : ''}><b>${esc(nm)}</b></li>`).join('');
+    const best = r.shortest && links <= r.shortest ? ' Le chemin le plus court !' : '';
+    $('#brWinSub').innerHTML = `<b>${plural(links, 'feat')}</b> en <b>${fmtTime(me.doneAt)}</b>.${best}`
+      + (S.solo ? '<span class="plus">+1</span>' : S.players.length > 1 ? '<br>Les autres peuvent encore faire plus court…' : '');
+    el.classList.remove('out');
+    el.hidden = false;
+    sfx.win();
+    if (navigator.vibrate) try { navigator.vibrate([40, 60, 80]); } catch {}
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) loadConfetti().then(() => {
+      if (!window.confetti) return;
+      const colors = ['#ffd21f', '#43b85c', '#f3f7e6', '#2fae4f'];
+      setTimeout(() => confetti({ particleCount: 110, spread: 85, origin: { y: 0.6 }, colors, zIndex: 60 }), 300);
+    });
+    const close = () => { clearTimeout(brWinTimer); el.classList.add('out'); setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 340); };
+    el.onclick = close;
+    clearTimeout(brWinTimer);
+    brWinTimer = setTimeout(close, 3200);
+  }
   function renderBridge() {
     const r = S.round;
     const N = S.players.length;
@@ -877,8 +902,10 @@
       bindTracks();
     }
     const rk = res ? `${r.id}` : '';
-    if (rk && rk !== brResKey && S.solo) { if (mineRes && mineRes.done) sfx.win(); }
     brResKey = rk;
+    // Arrivée : célébration plein écran, seulement au moment où ça arrive (pas en revenant sur une manche déjà finie).
+    if (brPrev.id === r.id && !brPrev.done && me.done) celebrateBridge(r, me, mine);
+    brPrev = { id: r.id, done: !!me.done };
     renderBridgeEnd(r);
     tickClock();
   }
@@ -1605,6 +1632,7 @@
     if (!total) return reset('∞');
     if (r.chain && !r.chain.length) return reset('—');
     if (S.mode === 'blind' && r.step !== 'guess') return reset('—');
+    if (r.paused ? r.remaining == null : r.msLeft == null) return reset('—'); // pas de chrono en cours (ex. pause entre deux ponts)
     const left = r.paused ? r.remaining : Math.max(0, r.msLeft - (performance.now() - stateAt));
     const held = r.paused && (r.checking || r.appeal);
     el.classList.toggle('paused', !!held);
