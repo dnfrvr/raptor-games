@@ -53,7 +53,7 @@
       bridge: 'Relie deux rappeurs par une chaîne de feats, avant les autres.',
       fans: 'Qui a le plus de fans sur Deezer ? Une erreur et tu sors.',
       timeline: 'Place chaque son au bon endroit sur la frise des sorties.',
-    }[m] || 'Le jeu des featurings, contre un pote ou contre le bot.';
+    }[m] || 'Les jeux rap entre potes, vérifiés en direct sur Deezer.';
     const RULES = { feat: 'rulesFeat', blind: 'rulesBlind', bridge: 'rulesBridge', fans: 'rulesFans', timeline: 'rulesTimeline' };
     for (const [k, id] of Object.entries(RULES)) $('#' + id).hidden = k !== m;
   }
@@ -212,8 +212,23 @@
 
   socket.on('link', ({ track }) => { if (track && track.preview) playPreview(track.preview); });
 
+  // Confettis : chargés seulement une fois en partie (inutiles sur l'accueil), avant la première victoire.
+  let confettiP = null;
+  function loadConfetti() {
+    if (!confettiP) confettiP = new Promise((res) => {
+      const sc = document.createElement('script');
+      sc.src = '/confetti.js'; sc.async = true; sc.onload = sc.onerror = () => res();
+      document.head.appendChild(sc);
+    });
+    return confettiP;
+  }
+
+  let shown = null;
   function show(id) {
+    if (id === 'game') setTimeout(loadConfetti, 1500);
     for (const s of ['home', 'lobby', 'game']) $('#' + s).hidden = s !== id;
+    // Nouvel écran : on repart du haut (sinon on garde la position de l'accueil et le haut du salon est caché).
+    if (id !== shown) { shown = id; window.scrollTo(0, 0); }
   }
 
   function render() {
@@ -226,6 +241,8 @@
     show('game');
     // Code du salon toujours affiché (discret) en bas : un joueur déconnecté peut revenir avec.
     $('#gameCode').hidden = !!S.solo;
+    // Réactions : seulement face à d'autres joueurs (en solo, personne pour les voir).
+    document.querySelectorAll('.reacts').forEach((el) => (el.hidden = !!S.solo));
     $('#gameCodeVal').textContent = S.code;
     $('#gameCode').onclick = () => {
       if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
@@ -246,7 +263,7 @@
     const soloAlone = S.solo && !S.players.some((p) => p.bot);
     const ready = N >= 2 || soloAlone;
     const url = `${location.origin}/r/${S.code}`;
-    $('#lobbyCode').textContent = S.code;
+    $('#lobbyCode').textContent = S.solo ? 'solo' : S.code; // en solo, pas de code à partager
     $('#bigCode').textContent = S.code;
     $('#lobby .roomtag').hidden = !S.solo; // le gros code le remplace en multi
     $('#codeBox').onclick = () => {
@@ -602,6 +619,10 @@
   };
   let qzKey = '', qzResId = null, qzOutKey = '';
 
+  // Deezer muet : bouton pour relancer le tirage au lieu de rester bloqué.
+  const RETRY = '<button type="button" class="btn ghost small-btn retry-btn" data-retry>Réessayer</button>';
+  const armRetry = (el) => { const b = el.querySelector('[data-retry]'); if (b) b.onclick = () => { b.disabled = true; socket.emit('retry'); }; };
+
   function renderQuiz() {
     const r = S.round;
     const fans = S.mode === 'fans';
@@ -654,9 +675,11 @@
       const truth = fans ? (next && next.fans != null ? `${esc(next.artist.name)} a <b>${fmtNum(next.fans)}</b> fans.` : '') : (next && next.date ? `Sorti ${next.prec === 'year' ? 'en' : 'le'} <b>${fmtDate(next.date, next.prec)}</b>.` : '');
       banner.innerHTML = res.ok ? `${res.who === S.me ? 'Bien vu' : esc(who) + ' a vu juste'} ! ${truth}` : `${res.value == null ? 'Temps écoulé' : 'Raté'}${res.who === S.me ? '' : ` pour ${esc(who)}`}. ${truth}`;
       banner.className = 'turn ' + (res.ok ? 'me' : 'them');
-    } else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
+    } else if (r.error) banner.innerHTML = `Deezer ne répond pas.${RETRY}`;
+    else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
     else if (fans) banner.innerHTML = myTurn ? `À toi : <b>${esc(next.artist.name)}</b> a-t-il plus ou moins de fans que <b>${esc(prev.artist.name)}</b> ?` : `${esc(turnName)} réfléchit : plus ou moins que ${esc(prev.artist.name)} ?`;
     else banner.innerHTML = myTurn ? 'À toi : <b>où placer ce son</b> sur la frise ?' : `${esc(turnName)} place ce son sur la frise.`;
+    armRetry(banner);
     document.title = !playing ? 'Raptor Games' : myTurn ? '● À toi | Raptor Games' : `${turnName} joue | Raptor Games`;
 
     // --- Panneau ---
@@ -799,12 +822,13 @@
     const mineRes = res && res.find((x) => x.i === S.me);
     banner.className = 'turn ' + (playing && !me.done && !me.gaveUp ? 'me' : 'them');
     banner.innerHTML = r.loading ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
-      : r.error ? 'Deezer ne répond pas, impossible de tirer un pont.'
+      : r.error ? `Deezer ne répond pas, impossible de tirer un pont.${RETRY}`
       : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution ? ` Chemin le plus court : <b>${esc(solPath(r))}</b>.` : ''} Pont suivant…`)
       : me.done ? `${me.auto && mine.length > 2 ? `<b>${esc(mine[mine.length - 2].artist.name)}</b> a un son avec <b>${esc(r.target.name)}</b> : ` : 'A'}${me.auto && mine.length > 2 ? 'a' : ''}rrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
       : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
         + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
+    armRetry(banner);
     document.title = playing && !me.done && !me.gaveUp ? '● Le pont | Raptor Games' : 'Raptor Games';
 
     // --- Formulaire ---
@@ -1771,11 +1795,14 @@
     const src = win ? '/rex-win.webp' : '/rex-sad.webp';
     if (rex && !rex.src.endsWith(src)) rex.src = src;
     const key = open ? (win ? 'win' : 'lose') + (S ? S.roundNo + '-' + S.phase : '') : '';
-    if (open && win && key !== sheetWas && window.confetti && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const colors = ['#ffd21f', '#43b85c', '#f3f7e6', '#2fae4f'];
-      confetti({ particleCount: 90, spread: 75, origin: { y: 0.75 }, colors, disableForReducedMotion: true });
-      setTimeout(() => confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0, y: 0.8 }, colors }), 250);
-      setTimeout(() => confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1, y: 0.8 }, colors }), 400);
+    if (open && win && key !== sheetWas && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      loadConfetti().then(() => {
+        if (!window.confetti) return;
+        const colors = ['#ffd21f', '#43b85c', '#f3f7e6', '#2fae4f'];
+        confetti({ particleCount: 90, spread: 75, origin: { y: 0.75 }, colors, disableForReducedMotion: true });
+        setTimeout(() => confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0, y: 0.8 }, colors }), 250);
+        setTimeout(() => confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1, y: 0.8 }, colors }), 400);
+      });
     }
     sheetWas = key;
   }).observe(sheetEl, { attributes: true, attributeFilter: ['hidden', 'class'] });

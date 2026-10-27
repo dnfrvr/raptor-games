@@ -222,6 +222,13 @@ class Room {
     if (this.lives <= 0) return this.endSolo(false, reason, this.players[0] ? this.players[0].score : 0);
     next();
   }
+  // Salon fermé (tout le monde est parti, ou inactif depuis longtemps) : on coupe toutes les minuteries,
+  // et les recherches Deezer en cours s'arrêtent d'elles-mêmes (elles vérifient la phase et this.closed).
+  dispose() {
+    this.closed = true;
+    this.phase = 'closed';
+    for (const t of ['timer', 'showTimer', 'botTimer', 'koTimer', 'soloTimer', 'revealTimer']) clearTimeout(this[t]);
+  }
   // Fin de la partie solo : plus de vies. Le record de la session est gardé.
   endSolo(won, reason, count) {
     for (const t of ['timer', 'showTimer', 'botTimer', 'koTimer', 'soloTimer']) clearTimeout(this[t]);

@@ -111,7 +111,7 @@ class BridgeRoom extends Room {
   }
 
   async prepareBridge() {
-    if (this.loadingBridge || this.nextBridge) return;
+    if (this.loadingBridge || this.nextBridge || this.closed) return;
     this.loadingBridge = true;
     try {
       this.nextBridge = await this.makeBridge();
@@ -221,6 +221,13 @@ class BridgeRoom extends Room {
   }
 
   // Retirer son dernier maillon (on s'est engagé sur une mauvaise piste).
+  // Deezer n'a pas répondu au tirage : on retente la même manche.
+  retry(token) {
+    const r = this.round;
+    if (this.idx(token) < 0 || this.phase !== 'playing' || !r || !r.error) return;
+    this.roundNo--;
+    this.newRound();
+  }
   undo(token) {
     const ctx = this.lane(token);
     if (!ctx || ctx.l.checking || ctx.l.arriving || ctx.l.chain.length < 2) return;

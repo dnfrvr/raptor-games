@@ -39,7 +39,23 @@ const UPDATED = new Date(Math.max(...CLIENT_FILES.map((f) => fs.statSync(path.jo
 const INDEX = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
   .replace(/\?v=[\w.]+/g, '?v=' + VERSION)
   .replace('<head>', `<head>\n  <meta name="app-version" content="${VERSION}" data-updated="${UPDATED.toISOString()}">`);
-const sendIndex = (_, res) => { res.set('Cache-Control', 'no-cache, no-store, must-revalidate'); res.type('html').send(INDEX); };
+// Aperçu des liens (WhatsApp, iMessage, Discord…) : adresses complètes, et un lien d'invitation /r/CODE
+// annonce qui invite et à quel jeu.
+const MODE_LABEL = { feat: 'un Roland Gamos', blind: 'un blind test', bridge: 'une partie de Pont', fans: 'un Plus ou moins', timeline: 'une partie de Frise' };
+const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const sendIndex = (req, res) => {
+  const base = `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}`;
+  let html = INDEX.replace('content="/og.jpg"', `content="${base}/og.jpg"`)
+    .replace('<meta property="og:type"', `<meta property="og:url" content="${attr(base + req.originalUrl)}">\n  <meta property="og:type"`);
+  const r = req.params.code && rooms.get(String(req.params.code).toUpperCase());
+  if (r && r.players[0]) {
+    const t = `${r.players[0].name} t’invite à ${MODE_LABEL[r.mode || 'feat'] || 'une partie'}`;
+    html = html.replace('<meta property="og:title" content="Raptor Games">', `<meta property="og:title" content="${attr(t)}">`)
+      .replace(/(<meta property="og:description" content=")[^"]*/, `$1Code ${r.code}. Touche le lien pour rejoindre la partie sur Raptor Games.`);
+  }
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.type('html').send(html);
+};
 app.get('/', sendIndex);
 app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer) }); });
 // Service worker : garde le jeu sur le téléphone pour l'ouvrir même quand le serveur dort.
@@ -48,7 +64,7 @@ app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('
 app.get('/app.js', send('app.js'));
 app.get('/styles.css', send('styles.css'));
 // Rex, la mascotte (3 humeurs), et le motif de fond.
-for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp', 'jungle-bg.webp']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
+for (const f of ['rex.webp', 'rex-win.webp', 'rex-sad.webp', 'jungle-bg.webp', 'og.jpg']) app.get('/' + f, (_, res) => res.sendFile(path.join(__dirname, f), { maxAge: '7d' }));
 // Confettis de victoire (canvas-confetti 1.9.3, licence ISC), servis depuis le dépôt.
 app.get('/confetti.js', (_, res) => res.sendFile(path.join(__dirname, 'confetti.js'), { maxAge: '30d' }));
 // Icônes (onglet du navigateur, écran d'accueil iOS/Android) et fiche d'application installable.
@@ -127,6 +143,7 @@ io.on('connection', (socket) => {
   // Blind test : choisir le son à faire deviner, ou revenir au choix de l'artiste.
   socket.on('bt:pick', act((d) => room.pick && room.pick(token, d.id)));
   socket.on('bt:back', act(() => room.back && room.back(token)));
+  socket.on('retry', act(() => room.retry && room.retry(token)));
   socket.on('br:undo', act(() => room.undo && room.undo(token)));
   socket.on('bt:refresh', act(() => room.refreshExtract && room.refreshExtract()));
   socket.on('qz:answer', act((d) => room.quizAnswer && room.quizAnswer(token, d.v)));
@@ -135,7 +152,7 @@ io.on('connection', (socket) => {
     if (!room || !token) return;
     // Solo : la partie contre le bot s'arrête. Sinon, quitter le salon libère la place (avant le lancement).
     if (room.solo || room.leave(token)) {
-      for (const t of ['timer', 'botTimer', 'koTimer', 'revealTimer']) clearTimeout(room[t]);
+      room.dispose();
       rooms.delete(room.code);
     }
     room = null; token = null;
@@ -154,7 +171,7 @@ io.on('connection', (socket) => {
 // Ménage : salons inactifs depuis 3 h.
 setInterval(() => {
   const limit = Date.now() - 3 * 3600 * 1000;
-  for (const [c, r] of rooms) if (r.lastActive < limit) { clearTimeout(r.timer); rooms.delete(c); }
+  for (const [c, r] of rooms) if (r.lastActive < limit) { r.dispose(); rooms.delete(c); }
 }, 10 * 60 * 1000).unref();
 
 const PORT = process.env.PORT || 3000;

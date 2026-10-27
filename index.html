@@ -6,6 +6,15 @@
   <meta name="theme-color" content="#0c2216">
   <title>Raptor Games</title>
   <meta name="description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Raptor Games">
+  <meta property="og:title" content="Raptor Games">
+  <meta property="og:description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
+  <meta property="og:image" content="/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Rex, la mascotte de Raptor Games">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -46,7 +55,7 @@
     <header class="logo">
       <img class="raptor logo-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
       <h1><span>Raptor</span><span class="o">Games</span></h1>
-      <p class="pitch" id="pitch">Le jeu des featurings, contre un pote ou contre le bot.</p>
+      <p class="pitch" id="pitch">Les jeux rap entre potes, vérifiés en direct sur Deezer.</p>
     </header>
 
     <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
@@ -254,8 +263,7 @@
   <div class="wake" id="wake" role="status" hidden><img class="raptor wake-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async"><span id="wakeText"></span></div>
   <audio id="audio" preload="none"></audio>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/confetti.js" defer></script>
+  <script src="/socket.io/socket.io.min.js"></script>
   <script src="/app.js?v=6"></script>
 </body>
 </html>

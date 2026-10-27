@@ -10,7 +10,7 @@ const { Room, TURN_CHOICES, FR_RAPPERS } = require('./game');
 const WORLD = [
   'Drake', 'Rihanna', 'Eminem', 'Kanye West', 'Travis Scott', 'Kendrick Lamar', 'Nicki Minaj', 'Cardi B', 'Post Malone',
   'The Weeknd', '50 Cent', 'Snoop Dogg', 'Jay-Z', 'Future', 'Lil Wayne', 'Burna Boy', 'Wizkid', 'Central Cee', 'Dave',
-  'Stromae', 'Aya Nakamura', 'Angèle', 'Wejdene', 'Shay', 'Imen Es', 'Dadju', 'Tayc', 'Aya Nakamura', 'Vitaa',
+  'Stromae', 'Aya Nakamura', 'Angèle', 'Wejdene', 'Shay', 'Imen Es', 'Dadju', 'Tayc', 'Vitaa',
 ];
 const POOL_FANS = [...new Set([...FR_RAPPERS, ...WORLD])];
 const POOL_TIME = [...new Set([...FR_RAPPERS, 'Eminem', 'Drake', 'Kanye West', '50 Cent', 'Snoop Dogg', 'Jay-Z', 'Stromae', 'Aya Nakamura'])];
@@ -59,7 +59,7 @@ class QuizRoom extends Room {
     return { key: 't' + t.id, track: { ...out, artist: a.name, picture: a.picture }, date, prec, base: deezer.norm(out.title).replace(/\s*(feat|ft)\b.*$/, '') };
   }
   async fill() {
-    if (this.filling) return;
+    if (this.filling || this.closed) return;
     this.filling = true;
     try {
       let guard = 0;
@@ -89,19 +89,37 @@ class QuizRoom extends Room {
     r.items = [];   // artistes révélés (fans) ou frise triée par date (timeline)
     r.next = null;  // la question en cours
     r.result = null;
-    r.checking = { loading: true };
     this.pauseClock();
-    this.broadcast();
-    const first = await this.take(r);
-    const next = first && await this.take({ items: [first] });
-    if (this.round !== r) return;
-    r.checking = false;
-    if (!first || !next) { r.lastError = { artist: { name: 'Deezer' }, why: 'api' }; return this.broadcast(); }
-    r.items.push(first);
-    r.next = next;
     r.chain.push({ artist: { name: 'start' }, by: r.turn }); // la manche est lancée (pas d'artiste de départ à choisir)
+    return this.loadNext(r);
+  }
+
+  // Prépare la question suivante (et la première carte en début de manche). Si Deezer ne répond pas après
+  // plusieurs essais, la manche affiche « Réessayer » au lieu de rester bloquée.
+  async loadNext(r) {
+    r.next = null; r.error = null;
+    r.checking = { loading: true };
+    this.broadcast();
+    let ok = true;
+    if (!r.items.length) {
+      let first = null;
+      for (let k = 0; k < 3 && !first; k++) first = await this.take(r);
+      if (this.round !== r || this.phase !== 'playing') return;
+      if (first) r.items.push(first); else ok = false;
+    }
+    let next = null;
+    for (let k = 0; ok && k < 3 && !next; k++) next = await this.take(r);
+    if (this.round !== r || this.phase !== 'playing') return;
+    r.checking = false;
+    if (!next) { r.error = 'api'; return this.broadcast(); }
+    r.next = next;
     this.resetClock();
     this.broadcast();
+  }
+  retry(token) {
+    const r = this.round;
+    if (this.idx(token) < 0 || this.phase !== 'playing' || !r || !r.error) return;
+    this.loadNext(r);
   }
   randomStart() {}
   choosing() { return false; }
@@ -148,16 +166,8 @@ class QuizRoom extends Room {
       if (this.round !== r || this.phase !== 'playing') return;
       r.result = null;
       if (!ok) return this.eliminate(i, 'wrong');
-      r.next = null;
-      r.checking = { loading: true };
       r.turn = this.nextAlive(i);
-      this.broadcast();
-      const next = await this.take(r);
-      if (this.round !== r || this.phase !== 'playing') return;
-      r.checking = false;
-      r.next = next;
-      this.resetClock();
-      this.broadcast();
+      this.loadNext(r);
     }, SHOW_MS);
   }
 
@@ -179,13 +189,7 @@ class QuizRoom extends Room {
     // Solo : une vie de moins, et on continue (au Plus ou moins, l'artiste raté devient la nouvelle référence).
     if (this.solo) return this.loseLife(reason, () => {
       if (this.mode === 'fans' && r.next) r.items.push(r.next);
-      r.next = null;
-      r.checking = { loading: true };
-      this.broadcast();
-      this.take(r).then((next) => {
-        if (this.round !== r || this.phase !== 'playing') return;
-        r.checking = false; r.next = next; this.resetClock(); this.broadcast();
-      });
+      this.loadNext(r);
     });
     r.lastOut = { who: i, reason, on: null };
     r.out.push(r.lastOut);
@@ -193,13 +197,7 @@ class QuizRoom extends Room {
     if (alive.length <= 1) return this.endRound(alive.length ? alive[0] : this.nextAlive(i), reason);
     // À trois et plus : le suivant reprend avec une nouvelle question.
     r.turn = this.nextAlive(i);
-    r.next = null;
-    r.checking = { loading: true };
-    this.broadcast();
-    this.take(r).then((next) => {
-      if (this.round !== r || this.phase !== 'playing') return;
-      r.checking = false; r.next = next; this.resetClock(); this.broadcast();
-    });
+    this.loadNext(r);
   }
 
   endRound(winner, reason) {
@@ -238,6 +236,7 @@ class QuizRoom extends Room {
       v.round.items = (r.items || []).map((x) => (this.mode === 'fans' ? { artist: x.artist, fans: x.fans } : { track: x.track, date: x.date, prec: x.prec || 'day' }));
       v.round.result = r.result ? { who: r.result.who, ok: r.result.ok, value: r.result.value, slot: r.result.slot, id: r.result.id } : null;
       v.round.chain = r.chain.map(() => ({})); v.round.solution = undefined;
+      v.round.error = r.error || null;
     }
     return v;
   }
