@@ -1,4 +1,4 @@
-// Le pont : le jeu tire deux artistes connus et le chemin de feats le plus court entre eux (2 à 4 feats).
+// Le pont : le jeu tire deux artistes connus et le chemin de feats le plus court entre eux (3 ou 4 feats).
 // Tout le monde joue EN MÊME TEMPS, chacun sur sa propre chaîne : partir du rappeur de départ et atteindre
 // celui d'arrivée de feat en feat (chaque feat vérifié sur Deezer). À la fin du chrono (ou quand tout le monde a fini),
 // gagne celui qui est arrivé avec le MOINS de feats ; à égalité, le plus RAPIDE.
@@ -39,7 +39,7 @@ class BridgeRoom extends Room {
   // Départ et arrivée : deux artistes connus (au-dessus d'un seuil de fans Deezer), pour qu'on sache qui c'est.
   // Puis le jeu cherche le chemin le plus court entre eux, des deux côtés à la fois (2 feats depuis le départ,
   // 2 feats depuis l'arrivée) : la longueur du pont est la vraie distance entre les deux, pas un nombre tiré.
-  // Deux niveaux tirés au hasard : classique (2 ou 3 feats) et difficile (4 feats).
+  // Deux niveaux tirés au hasard : classique (3 feats) et difficile (4 feats). Jamais moins de 3.
   static randomLevel() { return Math.random() < 0.3 ? 'hard' : 'classic'; }
 
   async famousByName(name) {
@@ -51,10 +51,12 @@ class BridgeRoom extends Room {
     const n = (x) => deezer.norm(x.name);
     const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
     let fallback = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // 3 départs essayés (les noms introuvables ou sous le seuil de fans ne comptent pas, dans la limite de 15).
+    for (let attempt = 0, picks = 0; attempt < 3 && picks < 15; picks++) {
       try {
         const A = await this.famousByName(rand(ENDPOINTS));
         if (!A) continue;
+        attempt++;
         // Côté départ : ses partenaires (1 feat) et les partenaires de ses 20 partenaires les plus écoutés (2 feats).
         const n1 = new Map(); // nom → { artist, track, rank }
         (await collab(A)).forEach((o, k) => n1.has(n(o.artist)) || n1.set(n(o.artist), { ...o, rank: k }));
@@ -71,21 +73,21 @@ class BridgeRoom extends Room {
         });
         // Arrivées possibles : des artistes connus, dans un ordre au hasard, jamais un partenaire direct du départ.
         const names = ENDPOINTS.filter((x) => deezer.norm(x) !== n(A)).sort(() => Math.random() - 0.5);
-        let lookups = 0, tried = 0; // au plus 5 arrivées étudiées (chacune coûte ~20 appels Deezer, gardés en cache)
+        let lookups = 0, tried = 0; // au plus 8 arrivées étudiées (chacune coûte ~20 appels Deezer, gardés en cache)
         for (const name of names) {
           const key = deezer.norm(name);
-          if (n1.has(key)) continue;          // 1 feat : trop facile
-          if (level === 'hard' && n2.has(key)) continue; // 2 feats : pas assez loin pour un pont difficile
-          if (tried >= 5 || lookups++ >= 15) break;
+          if (n1.has(key) || n2.has(key)) continue; // 1 ou 2 feats : trop court (3 au minimum)
+          if (tried >= 8 || lookups++ >= 25) break;
           const B = await this.famousByName(name);
           if (!B || same(A, B)) continue;
           tried++;
           const dist = await this.distances(B);
+          if (dist.t1.has(n(A)) || dist.t2.has(n(A))) continue; // vu depuis l'arrivée : 2 feats ou moins
           const path = this.meet(A, B, n1, n2, dist);
-          if (!path) continue;
+          if (!path || path.length - 1 < 3) continue;
           const len = path.length - 1;
           const b = { A, B, path: path.map((x) => x.artist), tracks: path.slice(1).map((x) => x.track || null), level: len >= 4 ? 'hard' : 'classic' };
-          if (level === 'hard' ? len >= 4 : len <= 3) return this.finishBridge(b, dist);
+          if (level === 'hard' ? len >= 4 : len === 3) return this.finishBridge(b, dist);
           if (!fallback || (level === 'hard' && len > fallback.b.path.length - 1)) fallback = { b, dist };
         }
       } catch (e) { console.error('bridge', e.message); }

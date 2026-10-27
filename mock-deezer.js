@@ -2,6 +2,8 @@
 const artists = [
   [1, 'Ninho'], [2, 'Jul'], [3, 'SCH'], [4, 'Booba'], [5, 'Damso'], [6, 'Gims'], [7, 'Niska'],
   [8, 'Aya Nakamura'], [9, 'Naps'], [10, 'Drake'], [11, 'Rihanna'], [12, 'Kanye West'], [13, 'Tiakola'], [14, 'Mister You'], [15, 'DJ Abdel'], [16, 'Francisco'], [17, 'Huntrill'], [18, 'TH'], [19, 'Kalash'], [20, 'Vadek'], [21, 'Edge'], [22, 'Demas'], [23, 'Kekra'],
+  // Une branche plus loin du reste (pour tirer des ponts de 3 et 4 feats) : Booba → Oxmo → IAM → Kery James → Orelsan → Stromae.
+  [24, 'Oxmo Puccino'], [25, 'IAM'], [26, 'Kery James'], [27, 'Orelsan'], [28, 'Stromae'],
 ].map(([id, name]) => ({ id, name, picture_medium: null, nb_fan: ((id * 7919) % 97 + 1) * 100000 + id }));
 const A = (n) => artists.find((a) => a.name === n);
 const tracks = [
@@ -36,6 +38,11 @@ const tracks = [
   [121, 'DIE', 'Vadek', ['Demas'], true],
   // Variante : l'invité n'est écrit que dans le titre.
   [119, 'Duo (feat. Kekra)', 'Naps', ['Tiakola']],
+  [122, 'Pitbull', 'Booba', ['Oxmo Puccino']],
+  [123, 'Ma Planète', 'IAM', ['Oxmo Puccino']],
+  [124, 'Le Retour du Shit', 'Kery James', ['IAM']],
+  [125, 'Suicide social', 'Orelsan', ['Kery James']],
+  [126, 'Carmen', 'Stromae', ['Orelsan']],
 ].map(([id, title, main, feats, deep]) => ({
   id, title, title_short: title, release_date: `20${10 + (id % 14)}-0${1 + (id % 9)}-1${id % 9}`, preview: `https://cdnt-preview.dzcdn.net/mock/${id}.mp3`, link: '#', deep: !!deep,
   album: { title, cover_medium: id === 110 ? 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22%3E%3Crect width=%2246%22 height=%2246%22 fill=%22%23d90b2c%22/%3E%3Ctext x=%224%22 y=%2228%22 font-size=%2212%22 fill=%22white%22%3EFRANCISCO%3C/text%3E%3C/svg%3E' : null },
