@@ -57,4 +57,40 @@ async function firstRelease(title, artist) {
   return best;
 }
 
-module.exports = { firstRelease };
+// Un son où a et b figurent ensemble, d'après les crédits MusicBrainz (« Caballero & JeanJass feat. Angèle »).
+// Sert de seconde vérification quand Deezer ne trouve pas le feat (son hors des tops, invité non crédité chez Deezer).
+// norm : la normalisation des noms du jeu. hint : titre donné par le joueur (facultatif).
+// Renvoie { title, credit, date } ou null.
+const pairCache = new Map();
+async function findTogether(aName, bName, hint, normName) {
+  const key = [normName(aName), normName(bName)].sort().join('|') + '|' + normName(hint || '');
+  if (pairCache.has(key)) return pairCache.get(key);
+  let found = null;
+  try {
+    let q = `artist:"${esc(aName)}" AND artist:"${esc(bName)}"`;
+    if (hint) q += ` AND recording:"${esc(hint)}"`;
+    const res = await throttled(() => fetch(`${API}?query=${encodeURIComponent(q)}&fmt=json&limit=25`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(7000),
+    }));
+    if (res.ok) {
+      const data = await res.json();
+      const words = (x) => ` ${normName(x)} `;
+      const A = words(aName), B = words(bName);
+      for (const rec of data.recordings || []) {
+        const ac = rec['artist-credit'] || [];
+        // Crédit complet (« Caballero & JeanJass feat. Angèle ») et chaque nom crédité.
+        const full = words(ac.map((c) => (c.name || (c.artist && c.artist.name) || '') + (c.joinphrase || '')).join(''));
+        const names = ac.map((c) => words(c.name || (c.artist && c.artist.name)));
+        const has = (X) => full.includes(X) || names.some((n) => n === X);
+        if (!has(A) || !has(B)) continue;
+        found = { title: rec.title, credit: ac.map((c) => (c.name || '') + (c.joinphrase || '')).join('').trim(), date: rec['first-release-date'] || null };
+        if (!hint || normName(rec.title) === normName(hint)) break;
+      }
+    }
+  } catch (_) { return null; /* MusicBrainz indisponible : pas de réponse retenue */ }
+  pairCache.set(key, found);
+  if (pairCache.size > 3000) pairCache.delete(pairCache.keys().next().value);
+  return found;
+}
+
+module.exports = { firstRelease, findTogether };

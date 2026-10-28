@@ -852,7 +852,7 @@
       : me.done ? `${me.auto && mine.length > 2 ? `<b>${esc(mine[mine.length - 2].artist.name)}</b> a un son avec <b>${esc(r.target.name)}</b> : ` : 'A'}${me.auto && mine.length > 2 ? 'a' : ''}rrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
       : `Relie <b>${esc(r.start ? r.start.name : '')}</b> à <b>${esc(r.target ? r.target.name : '')}</b> : qui a fait un son avec <b>${esc(cur ? cur.name : '')}</b> ?`
-        + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.level === 'hard' ? 'Pont difficile. ' : '') + (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left >= 3 ? 'Il te reste au moins 3 feats' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : '');
+        + (me.left != null ? `<span class="bt-fast">${mine.length <= 1 ? (r.level === 'hard' ? 'Pont difficile. ' : '') + (r.shortest ? `Chemin le plus court : ${plural(r.shortest, 'feat')}` : `Le jeu connaît un chemin en ${plural(r.pathLen, 'feat')}. Fais aussi court, ou mieux !`) : me.left === 1 ? 'Plus qu’un feat avant l’arrivée !' : `Il te reste au moins ${plural(me.left, 'feat')}`}</span>` : (playing && mine.length > 1 && !me.done && !me.gaveUp ? '<span class="bt-fast">Calcul des feats restants…</span>' : ''));
     armRetry(banner);
     document.title = playing && !me.done && !me.gaveUp ? '● Le pont | Raptor Games' : 'Raptor Games';
 

@@ -57,20 +57,7 @@ class BridgeRoom extends Room {
         const A = await this.famousByName(rand(ENDPOINTS));
         if (!A) continue;
         attempt++;
-        // Côté départ : ses partenaires (1 feat) et les partenaires de ses 20 partenaires les plus écoutés (2 feats).
-        const n1 = new Map(); // nom → { artist, track, rank }
-        (await collab(A)).forEach((o, k) => n1.has(n(o.artist)) || n1.set(n(o.artist), { ...o, rank: k }));
-        const firsts = [...n1.values()].slice(0, 20);
-        const n2 = new Map(); // nom → { artist, track, via, rank }
-        const lists = await Promise.allSettled(firsts.map((o) => collab(o.artist)));
-        lists.forEach((res, k) => {
-          if (res.status !== 'fulfilled') return;
-          res.value.forEach((o, j) => {
-            const key = n(o.artist);
-            if (key === n(A) || n1.has(key) || n2.has(key)) return;
-            n2.set(key, { ...o, via: firsts[k], rank: firsts[k].rank + j });
-          });
-        });
+        const { n1, n2 } = await this.around(A);
         // Arrivées possibles : des artistes connus, dans un ordre au hasard, jamais un partenaire direct du départ.
         const names = ENDPOINTS.filter((x) => deezer.norm(x) !== n(A)).sort(() => Math.random() - 0.5);
         let lookups = 0, tried = 0; // au plus 8 arrivées étudiées (chacune coûte ~20 appels Deezer, gardés en cache)
@@ -94,6 +81,27 @@ class BridgeRoom extends Room {
     }
     if (fallback) return this.finishBridge(fallback.b, fallback.dist);
     return level === 'hard' ? this.makeBridge('classic') : null; // pas de pont difficile trouvé : un classique
+  }
+
+  // Voisinage d'un artiste : ses partenaires (1 feat) et les partenaires de ses 20 partenaires les plus écoutés (2 feats).
+  async around(A) {
+    const n = (x) => deezer.norm(x.name);
+    const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
+    const n1 = new Map(); // nom → { artist, track, rank }
+    (await collab(A)).forEach((o, k) => n1.has(n(o.artist)) || n1.set(n(o.artist), { ...o, rank: k }));
+    deezer.knownPartners(A).forEach((o) => { if (o.artist.id && !n1.has(n(o.artist)) && !same(o.artist, A)) n1.set(n(o.artist), { ...o, rank: 100 + n1.size }); });
+    const firsts = [...n1.values()].slice(0, 20);
+    const n2 = new Map(); // nom → { artist, track, via, rank }
+    const lists = await Promise.allSettled(firsts.map((o) => collab(o.artist)));
+    lists.forEach((res, k) => {
+      if (res.status !== 'fulfilled') return;
+      res.value.forEach((o, j) => {
+        const key = n(o.artist);
+        if (key === n(A) || n1.has(key) || n2.has(key)) return;
+        n2.set(key, { ...o, via: firsts[k], rank: firsts[k].rank + j });
+      });
+    });
+    return { n1, n2 };
   }
 
   // Chemin le plus court trouvé entre A et B (2, 3 ou 4 feats), en préférant des intermédiaires connus
@@ -158,6 +166,35 @@ class BridgeRoom extends Room {
     if (!r.dist) return null;
     const k = deezer.norm(a.name);
     return r.dist.t1.has(k) ? 1 : r.dist.t2.has(k) ? 2 : 3;
+  }
+  // Feats restants depuis cet artiste, d'après le plus court chemin connu jusqu'à l'arrivée (jusqu'à 4 ; 5 = « au moins 5 »).
+  // Gardé en mémoire pour la manche (même artiste = même réponse, pour tous les joueurs).
+  async distanceTo(r, a) {
+    const quick = this.left(r, a);
+    if (quick == null || quick <= 2) return quick;
+    r.leftCache = r.leftCache || new Map();
+    const k = deezer.norm(a.name);
+    if (!r.leftCache.has(k)) {
+      r.leftCache.set(k, (async () => {
+        const { n1, n2 } = await this.around(a);
+        const path = this.meet(a, r.target, n1, n2, r.dist);
+        return path ? Math.max(3, path.length - 1) : 5;
+      })().catch(() => 3));
+    }
+    return r.leftCache.get(k);
+  }
+  // Met à jour le compteur de la voie après un ajout ou un retrait (calcul en tâche de fond si besoin).
+  updateLeft(r, l) {
+    const len = l.chain.length;
+    const a = l.chain[len - 1].artist;
+    const quick = this.left(r, a);
+    l.left = quick != null && quick <= 2 ? quick : null; // null : calcul en cours
+    if (l.left != null || quick == null) return;
+    this.distanceTo(r, a).then((d) => {
+      if (this.round !== r || l.chain.length !== len || l.done || l.gaveUp) return;
+      l.left = d;
+      this.broadcast();
+    });
   }
 
   async prepareBridge() {
@@ -229,7 +266,7 @@ class BridgeRoom extends Room {
     l.checking = false;
     if (!track) { if (!l.lastError) l.lastError = { artist: a, why: 'notfound' }; return this.broadcast(); }
     l.chain.push({ artist: a, track });
-    l.left = this.left(r, a);
+    this.updateLeft(r, l);
     deezer.prepare(a);
     if (same(a, r.target)) return this.arrive(r, l);
     this.broadcast();
@@ -283,7 +320,7 @@ class BridgeRoom extends Room {
     const ctx = this.lane(token);
     if (!ctx || ctx.l.checking || ctx.l.arriving || ctx.l.chain.length < 2) return;
     ctx.l.chain.pop();
-    ctx.l.left = this.left(ctx.r, ctx.l.chain[ctx.l.chain.length - 1].artist);
+    this.updateLeft(ctx.r, ctx.l);
     ctx.l.lastError = null;
     this.broadcast();
   }
@@ -366,7 +403,7 @@ class BridgeRoom extends Room {
       paused: !r.deadline, out: [],
       // Ma chaîne (complète) ; celle des autres reste cachée pendant la course (seulement leur avancée).
       chain: mine ? mine.chain : [],
-      me: mine ? { done: mine.done, auto: !!mine.auto, arriving: !!mine.arriving, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.left ?? (r.start ? this.left(r, r.start) : null) } : null,
+      me: mine ? { done: mine.done, auto: !!mine.auto, arriving: !!mine.arriving, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.chain.length > 1 ? mine.left ?? null : (r.start ? r.pathLen ?? this.left(r, r.start) : null) } : null,
       shortest: r.shortest ?? null,
       pathLen: r.pathLen ?? null,
       level: r.level || null,

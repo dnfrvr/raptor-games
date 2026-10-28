@@ -248,8 +248,36 @@ async function findFeat(a, b, songHint) {
   const small = [[a, topA], [b, topB]].filter(([, t]) => data(t).length < SMALL_TOP).map(([x]) => x);
   const deep = small.length ? await findFeatDeep(a, b, () => true, small) : null;
   if (deep) return done(deep);
+  // 4) Seconde source : les crédits MusicBrainz (son hors des tops, invité que Deezer ne crédite pas).
+  const viaMb = await mbFeat(a, b, hint);
+  if (viaMb) { noFeat.delete(pk); return { ...viaMb, rare: true, hinted: !!hint && titleMatches(viaMb, hint) }; }
   if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
   return null;
+}
+
+// Feat confirmé par MusicBrainz : on va chercher le son chez Deezer (extrait, pochette), sinon on garde le titre seul.
+// Le feat est ensuite retenu comme les autres (mémoire sauvegardée) : la prochaine fois, réponse immédiate.
+let mb = null;
+async function mbFeat(a, b, hint) {
+  if (process.env.DEEZER_MOCK) return null; // tests hors-ligne
+  if (!mb) mb = require('./musicbrainz');
+  const rec = await mb.findTogether(a.name, b.name, hint, norm).catch(() => null);
+  if (!rec) return null;
+  let t = null;
+  try {
+    const looks = await Promise.allSettled([a, b].map((x) => get(`/search?q=${encodeURIComponent(`${rec.title} ${x.name}`)}&limit=10`)));
+    const hits = looks.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : []));
+    t = hits.find((h) => titleMatches(h, rec.title) && h.artist && (matches(h.artist, a) || matches(h.artist, b))) || null;
+  } catch (_) { t = null; }
+  const out = t
+    ? { ...trackOut(t), artists: [...new Set([...trackOut(t).artists, a.name, b.name])] }
+    : { id: null, title: rec.title, fullTitle: rec.title, preview: null, link: null, cover: null, album: null, artists: [a.name, b.name] };
+  out.source = 'musicbrainz';
+  const exp = Date.now() + MEMO_TTL;
+  const k = pairKey(a.name, b.name);
+  if (out.id) { featMemo.set(k, { track: { ...out, at: Date.now() }, exp }); memoDirty++; }
+  link(a, b, out, exp); link(b, a, out, exp);
+  return out;
 }
 
 // Étape 3 : sorties (albums, EP, singles) des deux artistes et apparitions « feat. X ».
