@@ -980,7 +980,17 @@
 
   function renderBlind() {
     $('#playForm').classList.remove('br-form');
-    $('#randomBtn').onclick = () => socket.emit('randomStart');
+    // « Au hasard » : avec un artiste déjà tapé, un son au hasard de cet artiste ; sinon un artiste au hasard.
+    $('#randomBtn').onclick = async () => {
+      const typed = $('#artistInput').value.trim();
+      if (!typed) return socket.emit('randomStart');
+      let a = pickedArtist && pickedArtist.name.toLowerCase() === typed.toLowerCase() ? pickedArtist : null;
+      if (!a) {
+        try { const data = await (await fetch('/api/artists?q=' + encodeURIComponent(typed))).json(); a = data.find((x) => x.name.toLowerCase() === typed.toLowerCase()) || data[0]; } catch {}
+      }
+      $('#acList').hidden = true;
+      socket.emit('randomStart', a ? { artist: a } : {});
+    };
     const r = S.round;
     const N = S.players.length;
     buildScorebug(N);
@@ -1138,9 +1148,10 @@
         if (typed === q.trim() || typed.length < 2) {
           $('#btListHint').innerHTML = q.length >= 2
             ? (r.options.length ? `Sons de ${esc(r.artist.name)} pour « ${esc(q)} » :` : `Aucun son de ${esc(r.artist.name)} trouvé pour « ${esc(q)} ». Essaie un autre titre.`)
-            : `Ses sons les plus écoutés. Écoute, puis choisis. Ou tape un titre au-dessus.`;
+            : `Ses sons les plus écoutés. Choisis-en un, ou tape un titre au-dessus.`;
         }
-        $('#btOpts').innerHTML = r.options.map((t) => `<li><button type="button" class="bt-opt" data-id="${t.id}"><b>${esc(t.title)}</b>${t.album ? `<span>${esc(t.album)}</span>` : ''}</button>${t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="Écouter « ${esc(t.title)} »">${PLAY}</button>` : ''}</li>`).join('');
+        // En grille, sans extrait à écouter : plus de sons visibles d'un coup.
+        $('#btOpts').innerHTML = r.options.map((t) => `<li><button type="button" class="bt-opt" data-id="${t.id}" title="${esc(t.title)}"><b>${esc(t.title)}</b>${t.album && t.album !== t.title ? `<span>${esc(t.album)}</span>` : ''}</button></li>`).join('');
         $('#btOpts').querySelectorAll('.bt-opt').forEach((b) => (b.onclick = () => { audio.pause(); socket.emit('bt:pick', { id: Number(b.dataset.id) }); }));
         bindTracks();
       }
@@ -1172,7 +1183,8 @@
       $('#chain').innerHTML = log.length ? log.map((l) => {
         const pts = (l.points ? `<span class="tag rare">+${l.points}</span>` : '<span class="tag">0</span>') + (l.fast ? ' <span class="tag">Rapide</span>' : '') + (l.extended ? ' <span class="tag">Joker</span>' : '');
         return `<li class="p${l.guesser}"><div class="a">${esc(l.artist ? l.artist.name : '')} <span class="by">${esc(S.players[l.proposer]?.name || '')} → ${esc(S.players[l.guesser]?.name || '')}</span> ${pts}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les extraits joués s'affichent ici.</li>`;
+      }).reverse().join('') : '';
+      $('#chainWrap').hidden = !log.length; // pas de liste vide à l'écran
       bindTracks();
     }
 

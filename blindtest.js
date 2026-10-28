@@ -188,7 +188,9 @@ class BlindRoom extends Room {
     const r = this.round;
     if (this.phase !== 'playing' || !r || r.step !== 'pick' || i !== r.proposer) return;
     const pool = r.options.length ? r.options : r.topOptions || [];
-    const t = (trackId && pool.find((o) => o.id === Number(trackId))) || pool[Math.floor(Math.random() * pool.length)];
+    // « Au hasard » : un des 8 sons les plus écoutés de l'artiste (un extrait reconnaissable).
+    const known = (r.topOptions && r.topOptions.length ? r.topOptions : pool).slice(0, 8);
+    const t = (trackId && pool.find((o) => o.id === Number(trackId))) || known[Math.floor(Math.random() * known.length)];
     if (!t) return;
     r.track = t;
     this.usedTracks.add(t.id);
@@ -253,10 +255,17 @@ class BlindRoom extends Room {
   }
 
   // « Au hasard » pour celui qui propose : un rappeur français tiré au sort, puis un de ses sons.
-  async randomStart(token) {
+  // « Au hasard » : un son au hasard de l'artiste tapé s'il y en a un, sinon d'un artiste tiré au hasard.
+  async randomStart(token, artist) {
     const i = this.idx(token);
     const r = this.round;
     if (this.phase !== 'playing' || !r || r.step !== 'propose' || i !== r.proposer || r.checking) return;
+    if (artist && artist.id && artist.name) {
+      const a = { id: Number(artist.id), name: String(artist.name).slice(0, 80), picture: artist.picture || null };
+      await this.propose(i, a);
+      if (this.round === r && r.step === 'pick') this.pick(this.players[i].token, null);
+      return;
+    }
     return this.proposeRandom(i, true);
   }
 

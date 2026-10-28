@@ -536,8 +536,12 @@ body.ko-open .reacts { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .bt-disc.on { animation: none; } }
 .bt { margin: 14px 0 18px; display: grid; gap: 10px; }
 .bt .small { text-align: center; }
-.bt-opts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.bt-opts li { display: flex; align-items: center; gap: 8px; }
+.bt-opts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .bt-opts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.bt-opts li { display: flex; min-width: 0; }
+.bt-opts .bt-opt { padding: 9px 10px; }
+.bt-opts .bt-opt b { font-size: 15px; }
+.bt-opts .bt-opt span { font-size: 12px; }
 .bt-opt {
   flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; padding: 10px 12px; border: 0; cursor: pointer;
   background: var(--night-3); color: var(--paper); box-shadow: 0 4px 0 var(--deep);
