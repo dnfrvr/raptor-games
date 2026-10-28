@@ -282,11 +282,10 @@ class Room {
       if (stale()) return;
       if (names.some((n) => deezer.norm(n) !== deezer.norm(cur.name) && !isUsed({ name: n }))) return;
     }
+    // Partenaires connus (top + déjà appris, feats des joueurs compris) : pas besoin de fouiller.
     let top;
-    try { top = (await deezer.findCollaborators(cur, 100)).filter((o) => !isUsed(o.artist)); } catch (e) { return; }
+    try { top = await deezer.quickPartners(cur, isUsed); } catch (e) { return; }
     if (stale() || top.length) return;
-    // Partenaires déjà appris (préparation en tâche de fond, autres parties) : pas besoin de fouiller.
-    if (deezer.knownPartners(cur, isUsed).length) return;
     // Rien dans les sons les plus écoutés : avant de déclarer le K.O., fouille profonde (albums, apparitions).
     // Chrono en pause pendant la vérification, pour ne pas pénaliser le joueur.
     r.checking = { verifying: true, artist: { name: cur.name } };
@@ -524,14 +523,9 @@ class Room {
     let track = null;
     let failed = false;
     try {
-      // Le son qui vient d'être joué contient l'artiste en jeu : s'il contient aussi l'artiste proposé, c'est la preuve
-      // (utile quand ce son appartient à un troisième artiste, invisible côté des deux autres).
+      // Vérification commune à tous les jeux (voir deezer.verifyFeat).
       const last = r.chain[r.chain.length - 1];
-      if (last && last.track && last.track.id) {
-        const names = await deezer.trackArtists(last.track);
-        if (names.some((n) => deezer.norm(n) === deezer.norm(a.name))) track = { ...last.track, rare: false, hinted: false };
-      }
-      if (!track) track = await deezer.findFeat(cur, a, attempt.song);
+      track = await deezer.verifyFeat(cur, a, { song: attempt.song, lastTrack: last && last.track });
     } catch (e) {
       console.error('findFeat', e.message);
       failed = true;

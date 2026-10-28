@@ -9,6 +9,7 @@ const API = 'https://musicbrainz.org/ws/2/recording/';
 
 let last = 0;
 let chain = Promise.resolve();
+let waiting = 0; // requêtes en file (une par seconde) : au-delà de 4, on ne rajoute pas de vérification de feat
 const cache = new Map(); // "titre|artiste" → { date, prec } | null
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -16,7 +17,8 @@ const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const esc = (s) => String(s).replace(/(["\\])/g, '\\$1');
 
 function throttled(fn) {
-  const run = chain.then(async () => {
+  waiting++;
+  const run = chain.finally(() => { waiting--; }).then(async () => {
     const wait = Math.max(0, last + 1100 - Date.now());
     if (wait) await new Promise((r) => setTimeout(r, wait));
     last = Date.now();
@@ -65,6 +67,7 @@ const pairCache = new Map();
 async function findTogether(aName, bName, hint, normName) {
   const key = [normName(aName), normName(bName)].sort().join('|') + '|' + normName(hint || '');
   if (pairCache.has(key)) return pairCache.get(key);
+  if (waiting >= 4) return null; // MusicBrainz déjà très sollicité : on ne fait pas attendre le joueur
   let found = null;
   try {
     let q = `artist:"${esc(aName)}" AND artist:"${esc(bName)}"`;

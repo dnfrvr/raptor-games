@@ -178,7 +178,10 @@ function titleMatches(t, hint) {
 }
 
 const RARE_RANK = 30;
-const SMALL_TOP = 50; // top Deezer de moins de 50 sons = petit artiste : on fouille ses sorties // un feat est « rare » si son son n'est dans les 30 plus écoutés d'aucun des deux artistes
+const SMALL_TOP = 50;
+const DEEP_FANS = 1000000;   // artiste « moyen » (moins d'un million de fans) : on fouille aussi ses sorties
+const FEAT_BUDGET_MS = 6500; // temps maximum d'une vérification qui n'aboutit pas (hors file d'attente Deezer)
+ // top Deezer de moins de 50 sons = petit artiste : on fouille ses sorties // un feat est « rare » si son son n'est dans les 30 plus écoutés d'aucun des deux artistes
 
 /**
  * Cherche un son où a et b apparaissent ensemble.
@@ -209,12 +212,15 @@ async function findFeat(a, b, songHint) {
     return { ...clean, rare, hinted: !!hint };
   }
 
-  // 1) En parallèle : les tops des deux artistes (avec la liste des artistes de chaque son) et la recherche « A B »,
-  //    qui trouve aussi les sons où les deux ne sont qu'invités. Plus la recherche du titre si le joueur l'a donné.
+  // 1) En parallèle : les tops des deux artistes (avec la liste des artistes de chaque son) et les recherches « A B »
+  //    et « B A » (elles trouvent aussi les sons où les deux ne sont qu'invités), plus celles du titre s'il est donné.
   //    Les recherches partent tout de suite, mais on n'attend que les tops si le feat y est déjà.
   const settle = (p) => p.then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
-  const pairP = settle(get(`/search?q=${encodeURIComponent(`${a.name} ${b.name}`)}&limit=25`));
-  const hintedP = settle(hint ? get(`/search?q=${encodeURIComponent(`${hint} ${b.name}`)}&limit=25`) : Promise.resolve({ data: [] }));
+  const search = (q) => settle(get(`/search?q=${encodeURIComponent(q)}&limit=25`));
+  const searchesP = Promise.all([
+    search(`${a.name} ${b.name}`), search(`${b.name} ${a.name}`),
+    ...(hint ? [search(`${hint} ${b.name}`), search(`${hint} ${a.name}`)] : []),
+  ]);
   const [topA, topB] = await Promise.all([settle(get(`/artist/${a.id}/top?limit=100`)), settle(get(`/artist/${b.id}/top?limit=100`))]);
   const data = (r) => (r.status === 'fulfilled' ? r.value.data || [] : []);
   const rankIn = [topA, topB].map((r) => new Map(data(r).map((t, i) => [t.id, i])));
@@ -222,19 +228,23 @@ async function findFeat(a, b, songHint) {
   const result = (t) => ({ ...trackOut(t), rare: isRare(t), hinted: !!hint && titleMatches(t, hint) });
   const done = (t) => { noFeat.delete(pk); return result(t); };
 
-
   const ok = (t) => proves(t, a, b);
   const provers = dedupe([...data(topA), ...data(topB)].filter(ok));
   const want = (t) => !hint || titleMatches(t, hint);
   const best = provers.find(want);
   if (best) return done(best);
-  const [pair, hinted] = await Promise.all([pairP, hintedP]);
+
+  // Pas dans les tops : les sources plus lentes démarrent tout de suite, en parallèle des recherches
+  // (MusicBrainz, et la fouille des sorties de l'artiste le moins connu).
+  const started = Date.now();
+  const mbP = mbFeat(a, b, hint).catch(() => null);
+  const searches = await searchesP;
 
   // 2) Premiers résultats des recherches : preuve directe par le titre, sinon détail (liste officielle des artistes).
-  const searchHits = dedupe([...data(hinted).slice(0, 8), ...data(pair).slice(0, 8)]);
+  const searchHits = dedupe(searches.flatMap((r) => data(r).slice(0, 8)));
   const direct = searchHits.find((t) => ok(t) && want(t));
   if (direct) return done(direct);
-  const det = await Promise.allSettled(searchHits.map((t) => getTrack(t.id)));
+  const det = await Promise.allSettled(searchHits.slice(0, 24).map((t) => getTrack(t.id)));
   const found = det.map((d) => (d.status === 'fulfilled' ? d.value : null)).filter((t) => t && ok(t));
   const pick = found.find(want) || provers[0] || found[0];
   if (pick && want(pick)) return done(pick);
@@ -246,17 +256,63 @@ async function findFeat(a, b, songHint) {
     return { ...memo, rare: isRare(memo), hinted: false };
   }
 
-  // 3) Fouille profonde (sorties, apparitions « feat. X ») : seulement pour les petits artistes. Deezer renvoie un top
-  //    presque complet pour les gros artistes, et la recherche « A B » couvre déjà leurs feats ; c'est chez les petits
-  //    (top de quelques sons, invités crédités sans « feat » dans le titre) que les feats se cachent.
-  const small = [[a, topA], [b, topB]].filter(([, t]) => data(t).length < SMALL_TOP).map(([x]) => x);
-  const deep = small.length ? await findFeatDeep(a, b, () => true, small) : null;
-  if (deep) return done(deep);
-  // 4) Seconde source : les crédits MusicBrainz (son hors des tops, invité que Deezer ne crédite pas).
-  const viaMb = await mbFeat(a, b, hint);
-  if (viaMb) { noFeat.delete(pk); return { ...viaMb, rare: true, hinted: !!hint && titleMatches(viaMb, hint) }; }
+  // 3) Fouille des sorties (albums, EP, singles, apparitions « feat. X ») des petits et moyens artistes : chez les gros,
+  //    le top et les recherches couvrent déjà presque tout. Et 4) MusicBrainz (invités que Deezer ne crédite pas).
+  //    Le premier qui prouve le feat gagne ; au-delà du temps maximum on répond « non trouvé » sans le retenir
+  //    comme faux (les recherches finissent en fond et le feat est appris : un nouvel essai passera tout de suite).
+  const fans = await Promise.all([a, b].map((x) => (x.fans != null ? x.fans : getArtist(x.id).then((y) => y.fans).catch(() => null))));
+  const deepFor = [[a, topA, fans[0]], [b, topB, fans[1]]]
+    .filter(([, t, f]) => data(t).length < SMALL_TOP || (f != null && f < DEEP_FANS)).map(([x]) => x);
+  const deepP = deepFor.length ? findFeatDeep(a, b, () => true, deepFor) : Promise.resolve(null);
+  const last = await firstHit([deepP, mbP], Math.max(1500, FEAT_BUDGET_MS - (Date.now() - started)));
+  if (last === TIMEOUT) return null;
+  if (last && last.source === 'musicbrainz') { noFeat.delete(pk); return { ...last, rare: true, hinted: !!hint && titleMatches(last, hint) }; }
+  if (last) return done(last);
   if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
   return null;
+}
+
+// Premier résultat non nul parmi des promesses (null si aucune ne trouve, TIMEOUT si le temps est écoulé).
+const TIMEOUT = Symbol('timeout');
+function firstHit(promises, ms) {
+  return new Promise((resolve) => {
+    let left = promises.length;
+    const timer = setTimeout(() => resolve(TIMEOUT), ms);
+    const end = (v) => { clearTimeout(timer); resolve(v); };
+    if (!left) return end(null);
+    for (const p of promises) {
+      Promise.resolve(p).then((v) => { if (v) end(v); else if (--left === 0) end(null); }, () => { if (--left === 0) end(null); });
+    }
+  });
+}
+
+// Le son qui relie déjà l'artiste en jeu à la chaîne (le dernier maillon) contient-il aussi l'artiste proposé ?
+// C'est alors la preuve, sans recherche (utile quand ce son appartient à un troisième artiste).
+async function featFromTrack(track, b) {
+  if (!track || !track.id) return null;
+  const names = await trackArtists(track).catch(() => []);
+  return names.some((n) => norm(n) === norm(b.name)) ? { ...track, rare: false, hinted: false } : null;
+}
+
+/**
+ * Vérification d'un feat, la même dans tous les jeux (Roland Gamos, Le pont, arrivée automatique…).
+ * Ordre : base des joueurs → son du dernier maillon → mémoire → Deezer (tops, recherches, sorties) → MusicBrainz.
+ * opts.song : titre donné par le joueur ; opts.lastTrack : son qui relie déjà `a` à la chaîne.
+ */
+async function verifyFeat(a, b, { song = '', lastTrack = null } = {}) {
+  if (!community.lookup(a, b) && lastTrack) {
+    const viaLast = await featFromTrack(lastTrack, b);
+    if (viaLast && (!song || titleMatches({ title: viaLast.title }, song))) return viaLast;
+  }
+  return findFeat(a, b, song);
+}
+
+// Partenaires connus d'un artiste, vite : ses 100 sons les plus écoutés + ce que le jeu a déjà appris
+// (autres parties, préparation, MusicBrainz, feats ajoutés par les joueurs). Même liste pour le bot, le K.O. et Le pont.
+async function quickPartners(a, isUsed = () => false) {
+  const top = (await findCollaborators(a, 100)).filter((o) => !isUsed(o.artist));
+  const seen = new Set(top.map((o) => norm(o.artist.name)));
+  return [...top, ...knownPartners(a, isUsed).filter((o) => !seen.has(norm(o.artist.name)) && !matches(o.artist, a))];
 }
 
 // Version Deezer d'un son dont on connaît le titre (extrait, pochette) : recherche « titre + artiste ».
@@ -689,4 +745,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { learnCommunity, community, previewOk, getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { verifyFeat, quickPartners, learnCommunity, community, previewOk, getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

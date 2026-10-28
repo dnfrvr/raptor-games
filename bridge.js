@@ -49,7 +49,6 @@ class BridgeRoom extends Room {
 
   async makeBridge(level = BridgeRoom.randomLevel()) {
     const n = (x) => deezer.norm(x.name);
-    const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
     let fallback = null;
     // 3 départs essayés (les noms introuvables ou sous le seuil de fans ne comptent pas, dans la limite de 15).
     for (let attempt = 0, picks = 0; attempt < 3 && picks < 15; picks++) {
@@ -86,10 +85,9 @@ class BridgeRoom extends Room {
   // Voisinage d'un artiste : ses partenaires (1 feat) et les partenaires de ses 20 partenaires les plus écoutés (2 feats).
   async around(A) {
     const n = (x) => deezer.norm(x.name);
-    const collab = async (x) => (await deezer.findCollaborators(x, 100)).filter((o) => o.artist.id && !same(o.artist, x));
+    const collab = async (x) => (await deezer.quickPartners(x)).filter((o) => o.artist.id && !same(o.artist, x));
     const n1 = new Map(); // nom → { artist, track, rank }
     (await collab(A)).forEach((o, k) => n1.has(n(o.artist)) || n1.set(n(o.artist), { ...o, rank: k }));
-    deezer.knownPartners(A).forEach((o) => { if (o.artist.id && !n1.has(n(o.artist)) && !same(o.artist, A)) n1.set(n(o.artist), { ...o, rank: 100 + n1.size }); });
     const firsts = [...n1.values()].slice(0, 20);
     const n2 = new Map(); // nom → { artist, track, via, rank }
     const lists = await Promise.allSettled(firsts.map((o) => collab(o.artist)));
@@ -145,11 +143,10 @@ class BridgeRoom extends Room {
     const t1 = new Map(); // nom → { artist, track, rank } (a fait un son avec l'arrivée ; rang = place dans ses sons)
     const t2 = new Map(); // nom → { via: partenaire de l'arrivée, track, rank }
     try {
-      const c1 = await deezer.findCollaborators(B, 100);
+      const c1 = await deezer.quickPartners(B);
       c1.forEach((o, k) => { if (!same(o.artist, B) && !t1.has(n(o.artist))) t1.set(n(o.artist), { ...o, rank: k }); });
-      deezer.knownPartners(B).forEach((o) => { if (!t1.has(n(o.artist))) t1.set(n(o.artist), { ...o, rank: 100 + t1.size }); });
       const firsts = [...t1.values()].filter((o) => o.artist.id).slice(0, 20);
-      const lists = await Promise.allSettled(firsts.map((o) => deezer.findCollaborators(o.artist, 100)));
+      const lists = await Promise.allSettled(firsts.map((o) => deezer.quickPartners(o.artist)));
       lists.forEach((res, k) => {
         if (res.status !== 'fulfilled') return;
         res.value.forEach((o, j) => {
@@ -262,7 +259,8 @@ class BridgeRoom extends Room {
     this.broadcast();
     let track = null;
     const hint = song ? String(song).slice(0, 100) : '';
-    try { track = await deezer.findFeat(cur, a, hint); } catch (e) { l.lastError = { artist: a, song: hint, why: 'api' }; }
+    const lastTrack = l.chain[l.chain.length - 1].track;
+    try { track = await deezer.verifyFeat(cur, a, { song: hint, lastTrack }); } catch (e) { l.lastError = { artist: a, song: hint, why: 'api' }; }
     if (this.round !== r || l.done || l.gaveUp || r.results) return;
     l.checking = false;
     if (!track) { if (!l.lastError) l.lastError = { artist: a, song: hint, why: 'notfound' }; return this.broadcast(); }
@@ -301,7 +299,7 @@ class BridgeRoom extends Room {
     if (!track) {
       l.arriving = true;
       this.broadcast();
-      try { track = await deezer.findFeat(a, B, ''); } catch (_) { track = null; }
+      try { track = await deezer.verifyFeat(a, B, { lastTrack: l.chain[len - 1].track }); } catch (_) { track = null; }
       if (!still()) { if (l.chain.length === len) { l.arriving = false; this.broadcast(); } return; }
       l.arriving = false;
       if (!track) return this.broadcast();
