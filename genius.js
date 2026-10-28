@@ -11,19 +11,23 @@ const status = { enabled: !!TOKEN, lastOk: null, lastError: null };
 async function findTogether(aName, bName, hint, normName) {
   if (!TOKEN) return null;
   const key = [normName(aName), normName(bName)].sort().join('|') + '|' + normName(hint || '');
-  if (cache.has(key)) return cache.get(key);
+  const hit = cache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.found;
   const words = (x) => ` ${normName(x)} `;
   const A = words(aName), B = words(bName);
-  const queries = hint ? [`${hint} ${aName}`, `${hint} ${bName}`] : [`${aName} ${bName}`];
-  let found = null;
+  // Les deux ordres : la recherche Genius dépend de l'ordre des mots (« Stromae GIMS » trouve « AVF »,
+  // « GIMS Stromae » peut ne renvoyer que des sons de GIMS).
+  const queries = hint ? [`${hint} ${aName}`, `${hint} ${bName}`] : [`${aName} ${bName}`, `${bName} ${aName}`];
+  let found = null, failed = false;
   try {
     const res = await Promise.allSettled(queries.map((q) => fetch(`${API}?q=${encodeURIComponent(q)}&per_page=20`, {
       headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' }, signal: AbortSignal.timeout(5000),
     }).then(async (r) => {
-      if (!r.ok) { status.lastError = `HTTP ${r.status}${r.status === 401 ? ' (jeton refusé)' : ''}`; return null; }
+      if (!r.ok) { failed = true; status.lastError = `HTTP ${r.status}${r.status === 401 ? ' (jeton refusé)' : ''}`; return null; }
       status.lastOk = new Date().toISOString(); status.lastError = null;
       return r.json();
     })));
+    if (res.some((r) => r.status === 'rejected')) failed = true;
     const hits = res.flatMap((r) => (r.status === 'fulfilled' && r.value && r.value.response ? r.value.response.hits || [] : []));
     for (const h of hits) {
       const s = h && h.result;
@@ -37,7 +41,8 @@ async function findTogether(aName, bName, hint, normName) {
       if (!hint || normName(s.title) === normName(hint)) break;
     }
   } catch (e) { status.lastError = e.message; return null; /* Genius indisponible */ }
-  cache.set(key, found);
+  // Réponse retenue : un feat trouvé pour toujours, une absence 30 min ; rien si Genius a eu un souci (on réessaiera).
+  if (found || !failed) cache.set(key, { found, exp: found ? Infinity : Date.now() + 30 * 60 * 1000 });
   if (cache.size > 3000) cache.delete(cache.keys().next().value);
   return found;
 }
