@@ -5,6 +5,7 @@
 const TOKEN = process.env.GENIUS_TOKEN || '';
 const API = 'https://api.genius.com/search';
 const cache = new Map();
+const status = { enabled: !!TOKEN, lastOk: null, lastError: null };
 
 // { title, credit } d'un son où a et b sont crédités ensemble, ou null. normName : la normalisation des noms du jeu.
 async function findTogether(aName, bName, hint, normName) {
@@ -18,7 +19,11 @@ async function findTogether(aName, bName, hint, normName) {
   try {
     const res = await Promise.allSettled(queries.map((q) => fetch(`${API}?q=${encodeURIComponent(q)}&per_page=20`, {
       headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' }, signal: AbortSignal.timeout(5000),
-    }).then((r) => (r.ok ? r.json() : null))));
+    }).then(async (r) => {
+      if (!r.ok) { status.lastError = `HTTP ${r.status}${r.status === 401 ? ' (jeton refusé)' : ''}`; return null; }
+      status.lastOk = new Date().toISOString(); status.lastError = null;
+      return r.json();
+    })));
     const hits = res.flatMap((r) => (r.status === 'fulfilled' && r.value && r.value.response ? r.value.response.hits || [] : []));
     for (const h of hits) {
       const s = h && h.result;
@@ -31,10 +36,10 @@ async function findTogether(aName, bName, hint, normName) {
       found = { title: s.title, credit: s.artist_names || '' };
       if (!hint || normName(s.title) === normName(hint)) break;
     }
-  } catch (_) { return null; /* Genius indisponible */ }
+  } catch (e) { status.lastError = e.message; return null; /* Genius indisponible */ }
   cache.set(key, found);
   if (cache.size > 3000) cache.delete(cache.keys().next().value);
   return found;
 }
 
-module.exports = { findTogether, enabled: () => !!TOKEN };
+module.exports = { findTogether, enabled: () => !!TOKEN, info: () => ({ ...status }) };

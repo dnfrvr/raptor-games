@@ -55,6 +55,14 @@
     </div>
     <div id="list"></div>
 
+    <h2>Tester un feat</h2>
+    <div class="row">
+      <input id="chkA" placeholder="Artiste 1 (ex. Stromae)">
+      <input id="chkB" placeholder="Artiste 2 (ex. Gims)">
+      <button id="chk" class="ghost">Tester</button>
+    </div>
+    <p class="msg" id="chkMsg"></p>
+
     <h2>Ajouter un feat</h2>
     <div class="row">
       <input id="newA" placeholder="Artiste 1 (ex. Stromae)">
@@ -147,6 +155,14 @@
       say('Feat ajouté et validé.');
       await load();
     } catch (e) { say(e.message, true); }
+  };
+  $('#chk').onclick = async () => {
+    const m = $('#chkMsg'); m.classList.remove('err'); m.textContent = 'Vérification…';
+    try {
+      const r = await api('GET', `/api/admin/check?a=${encodeURIComponent($('#chkA').value)}&b=${encodeURIComponent($('#chkB').value)}`);
+      const g = r.genius.enabled ? (r.genius.lastError ? ` · Genius : erreur ${r.genius.lastError}` : r.genius.lastOk ? ' · Genius : OK' : '') : ' · Genius : pas de jeton';
+      m.textContent = r.found ? `${r.a} × ${r.b} : oui, « ${r.title} » (source : ${r.source}, ${(r.ms / 1000).toFixed(1)} s)${g}` : `${r.a} × ${r.b} : non trouvé (${(r.ms / 1000).toFixed(1)} s)${g}`;
+    } catch (e) { m.textContent = e.message; m.classList.add('err'); }
   };
   const enter = () => { code = $('#code').value.trim(); load(); };
   $('#go').onclick = enter;

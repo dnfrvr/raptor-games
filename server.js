@@ -60,7 +60,7 @@ const sendIndex = (req, res) => {
   res.type('html').send(html);
 };
 app.get('/', sendIndex);
-app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer), featsJoueurs: community.info() }); });
+app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer), featsJoueurs: community.info(), genius: require('./genius').info() }); });
 
 // ---------- Admin : feats ajoutés par les joueurs (valider, corriger, supprimer) ----------
 // Protégé par le code ADMIN_CODE (variable d'environnement sur Render). Sans ce code : admin désactivée.
@@ -78,6 +78,19 @@ const admin = (fn) => async (req, res) => {
 };
 app.get('/admin', (_, res) => { res.set('Cache-Control', 'no-store'); res.set('X-Robots-Tag', 'noindex'); res.sendFile(path.join(__dirname, 'admin.html')); });
 app.use('/api/admin', express.json({ limit: '10kb' }));
+// Testeur : le jeu reconnaît-il ce feat, et grâce à quelle source ?
+app.get('/api/admin/check', admin(async (req) => {
+  const res = await Promise.all([req.query.a, req.query.b].map(async (q) => {
+    const name = String(q || '').trim().slice(0, 80);
+    const list = name ? await deezer.searchArtists(name, 5) : [];
+    return list.find((x) => deezer.norm(x.name) === deezer.norm(name)) || list[0] || null;
+  }));
+  if (!res[0] || !res[1]) throw new Error('Artiste introuvable sur Deezer.');
+  const t0 = Date.now();
+  const t = await deezer.verifyFeat(res[0], res[1], { song: String(req.query.title || '').slice(0, 100) });
+  const SRC = { joueurs: 'ajouté par les joueurs', musicbrainz: 'MusicBrainz', genius: 'Genius' };
+  return { a: res[0].name, b: res[1].name, found: !!t, title: t ? t.title : null, source: t ? SRC[t.source] || 'Deezer' : null, ms: Date.now() - t0, genius: require('./genius').info() };
+}));
 app.get('/api/admin/feats', admin(() => ({ feats: community.list(), info: community.info() })));
 app.post('/api/admin/feats', admin((req) => {
   const e = community.add(String(req.body.a || '').trim(), String(req.body.b || '').trim(), String(req.body.title || ''));
