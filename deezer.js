@@ -238,6 +238,7 @@ async function findFeat(a, b, songHint) {
   // (MusicBrainz, et la fouille des sorties de l'artiste le moins connu).
   const started = Date.now();
   const mbP = mbFeat(a, b, hint).catch(() => null);
+  const geniusP = geniusFeat(a, b, hint).catch(() => null);
   const searches = await searchesP;
 
   // 2) Premiers résultats des recherches : preuve directe par le titre, sinon détail (liste officielle des artistes).
@@ -257,16 +258,16 @@ async function findFeat(a, b, songHint) {
   }
 
   // 3) Fouille des sorties (albums, EP, singles, apparitions « feat. X ») des petits et moyens artistes : chez les gros,
-  //    le top et les recherches couvrent déjà presque tout. Et 4) MusicBrainz (invités que Deezer ne crédite pas).
+  //    le top et les recherches couvrent déjà presque tout. Et 4) MusicBrainz et Genius (invités que Deezer ne crédite pas).
   //    Le premier qui prouve le feat gagne ; au-delà du temps maximum on répond « non trouvé » sans le retenir
   //    comme faux (les recherches finissent en fond et le feat est appris : un nouvel essai passera tout de suite).
   const fans = await Promise.all([a, b].map((x) => (x.fans != null ? x.fans : getArtist(x.id).then((y) => y.fans).catch(() => null))));
   const deepFor = [[a, topA, fans[0]], [b, topB, fans[1]]]
     .filter(([, t, f]) => data(t).length < SMALL_TOP || (f != null && f < DEEP_FANS)).map(([x]) => x);
   const deepP = deepFor.length ? findFeatDeep(a, b, () => true, deepFor) : Promise.resolve(null);
-  const last = await firstHit([deepP, mbP], Math.max(1500, FEAT_BUDGET_MS - (Date.now() - started)));
+  const last = await firstHit([deepP, geniusP, mbP], Math.max(1500, FEAT_BUDGET_MS - (Date.now() - started)));
   if (last === TIMEOUT) return null;
-  if (last && last.source === 'musicbrainz') { noFeat.delete(pk); return { ...last, rare: true, hinted: !!hint && titleMatches(last, hint) }; }
+  if (last && (last.source === 'musicbrainz' || last.source === 'genius')) { noFeat.delete(pk); return { ...last, rare: true, hinted: !!hint && titleMatches(last, hint) }; }
   if (last) return done(last);
   if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
   return null;
@@ -296,7 +297,7 @@ async function featFromTrack(track, b) {
 
 /**
  * Vérification d'un feat, la même dans tous les jeux (Roland Gamos, Le pont, arrivée automatique…).
- * Ordre : base des joueurs → son du dernier maillon → mémoire → Deezer (tops, recherches, sorties) → MusicBrainz.
+ * Ordre : base des joueurs → son du dernier maillon → mémoire → Deezer (tops, recherches, sorties) → MusicBrainz et Genius.
  * opts.song : titre donné par le joueur ; opts.lastTrack : son qui relie déjà `a` à la chaîne.
  */
 async function verifyFeat(a, b, { song = '', lastTrack = null } = {}) {
@@ -326,20 +327,29 @@ async function trackByTitle(a, b, title) {
 }
 const bareTrack = (a, b, title) => ({ id: null, title, fullTitle: title, preview: null, link: null, cover: null, album: null, artists: [a.name, b.name] });
 
-// Feat confirmé par MusicBrainz : on va chercher le son chez Deezer (extrait, pochette), sinon on garde le titre seul.
-// Le feat est ensuite retenu comme les autres (mémoire sauvegardée) : la prochaine fois, réponse immédiate.
-let mb = null;
-async function mbFeat(a, b, hint) {
-  if (process.env.DEEZER_MOCK) return null; // tests hors-ligne
-  if (!mb) mb = require('./musicbrainz');
-  const rec = await mb.findTogether(a.name, b.name, hint, norm).catch(() => null);
-  if (!rec) return null;
+// Feat confirmé par une source de crédits extérieure (MusicBrainz, Genius) : on va chercher le son chez Deezer
+// (extrait, pochette), sinon on garde le titre seul. Le feat est ensuite retenu comme les autres : la prochaine fois,
+// réponse immédiate.
+let mb = null, genius = null;
+async function fromCredits(a, b, rec, source) {
   const out = (await trackByTitle(a, b, rec.title)) || bareTrack(a, b, rec.title);
-  out.source = 'musicbrainz';
+  out.source = source;
   const exp = Date.now() + MEMO_TTL;
   if (out.id) { featMemo.set(pairKey(a.name, b.name), { track: { ...out, at: Date.now() }, exp }); memoDirty++; }
   link(a, b, out, exp); link(b, a, out, exp);
   return out;
+}
+async function mbFeat(a, b, hint) {
+  if (process.env.DEEZER_MOCK) return null; // tests hors-ligne
+  if (!mb) mb = require('./musicbrainz');
+  const rec = await mb.findTogether(a.name, b.name, hint, norm).catch(() => null);
+  return rec ? fromCredits(a, b, rec, 'musicbrainz') : null;
+}
+async function geniusFeat(a, b, hint) {
+  if (process.env.DEEZER_MOCK) return null;
+  if (!genius) genius = require('./genius');
+  const rec = await genius.findTogether(a.name, b.name, hint, norm).catch(() => null);
+  return rec ? fromCredits(a, b, rec, 'genius') : null;
 }
 
 // ---------- Feats ajoutés par les joueurs (base commune, voir community.js) ----------

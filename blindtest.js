@@ -7,9 +7,10 @@ const { Room, TURN_CHOICES, FR_RAPPERS, BOT_TOKEN, MAX_TRIES, AFTER_MISS_MS } = 
 const REVEAL_MS = 7000;   // réponse affichée avant l'extrait suivant
 const OPTIONS = 8;        // sons proposés au joueur qui choisit
 // Écoute : par défaut, seulement les 10 premières secondes de l'extrait Deezer (qui en fait 30).
-// Joker de rapidité (artiste trouvé dans le premier quart du chrono) : plus tard, il débloque la suite de l'extrait.
+// Joker de rapidité (artiste trouvé vite : 12 s avec un chrono de 30 s, voir fastLimit) : plus tard, il débloque la suite de l'extrait.
 const FIRST_LISTEN_S = 10;
-const FAST_NO_CLOCK_MS = 8000; // seuil « rapide » quand la partie se joue sans chrono
+const FAST_NO_CLOCK_MS = 15000; // seuil « rapide » quand la partie se joue sans chrono
+const LOAD_GRACE_MS = 1500;     // temps de chargement de l'extrait, pas compté dans la rapidité
 // Bot : temps de réflexion, chance de trouver l'artiste, puis le titre.
 const BOT = {
   easy:   { think: [6000, 10000], artist: 0.45, title: 0.25 },
@@ -27,11 +28,21 @@ function lev(a, b) {
   }
   return d[a.length][b.length];
 }
+// Titre accepté : le bon titre à quelques fautes près (une par tranche de 5 lettres), sans « le / la / les / l' »
+// au début, sans espaces ; ou le début d'un titre long (« Je suis chez moi » pour « Je suis chez moi, tranquille »).
+const bare = (t) => t.replace(/^(?:le|la|les|l|un|une|des|the|a)\s+/, '');
 function titleOk(track, guess) {
-  const g = baseTitle(guess) || deezer.norm(guess);
+  const g = bare(baseTitle(guess) || deezer.norm(guess));
   if (g.length < 2) return false;
-  const targets = [baseTitle(track.title), deezer.norm(track.title)].filter(Boolean);
-  return targets.some((b) => g === b || (b.length >= 5 && lev(g, b) <= Math.max(1, Math.floor(b.length / 7))));
+  const targets = [baseTitle(track.title), deezer.norm(track.title)].filter(Boolean).map(bare);
+  const tight = (x) => x.replace(/\s+/g, '');
+  return targets.some((b) => {
+    if (g === b || tight(g) === tight(b)) return true;
+    if (b.length >= 5 && lev(tight(g), tight(b)) <= Math.max(1, Math.floor(b.length / 5))) return true;
+    // Début d'un titre long : au moins 2 mots et la moitié du titre.
+    const gw = g.split(' '), bw = b.split(' ');
+    return gw.length >= 2 && bw.length > gw.length && gw.length * 2 >= bw.length && bw.slice(0, gw.length).join(' ') === g;
+  });
 }
 
 class BlindRoom extends Room {
@@ -107,7 +118,12 @@ class BlindRoom extends Room {
     this.emitAll('extractMore', { id: r.id, preview: r.track.preview, from: FIRST_LISTEN_S });
   }
 
-  fastLimit() { return this.settings.turnSeconds ? (this.settings.turnSeconds * 1000) / 4 : FAST_NO_CLOCK_MS; }
+  // Seuil du joker de rapidité : 40 % du chrono, au moins 12 s, sans dépasser 60 % du chrono (10 s → 6 s, 20 s → 12 s,
+  // 30 s → 12 s, 60 s → 24 s). Il faut le temps d'écouter, de taper le nom et de le choisir dans la liste.
+  fastLimit() {
+    const c = this.settings.turnSeconds * 1000;
+    return c ? Math.min(c * 0.6, Math.max(12000, c * 0.4)) : FAST_NO_CLOCK_MS;
+  }
   choosing() { return false; }
 
   newExtract(proposer) {
@@ -311,8 +327,8 @@ class BlindRoom extends Room {
     const points = found ? 1 + (found.title ? 1 : 0) : 0;
     const g = this.players[r.guesser];
     g.pts = (g.pts || 0) + points;
-    // Joker de rapidité : artiste trouvé dans le premier quart du chrono (pas pour le bot).
-    const ms = Date.now() - (r.guessAt || Date.now());
+    // Joker de rapidité : artiste trouvé vite (pas pour le bot) ; le chargement de l'extrait n'est pas compté.
+    const ms = Math.max(0, Date.now() - (r.guessAt || Date.now()) - LOAD_GRACE_MS);
     const fast = !!found && !g.bot && ms <= this.fastLimit();
     if (fast) g.jokers = (g.jokers || 0) + 1;
     r.step = 'reveal';
