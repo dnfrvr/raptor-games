@@ -244,13 +244,16 @@ async function findFeat(a, b, songHint, ctx = {}) {
   const mbP = tag(mbFeat(a, b, hint), 'musicbrainz'); // une requête par seconde au plus : seulement si les tops n'ont rien
 
   // 2) Recherches : preuve directe par le titre ; sinon, si Genius a déjà répondu, on s'arrête là ;
-  //    sinon détail (liste officielle des artistes) des 10 premiers résultats seulement.
+  //    sinon détail (liste officielle des artistes) des 10 premiers résultats.
   const searches = await searchesP;
   const searchHits = dedupe(searches.flatMap((r) => data(r).slice(0, 8)));
   const direct = searchHits.find((t) => ok(t) && want(t));
   if (direct) return done(direct, 'recherche');
   if (geniusNow && !hint) return credited(geniusNow);
-  const firstOfEach = dedupe([0, 1, 2, 3, 4].flatMap((k) => searches.map((r) => data(r)[k]).filter(Boolean))).slice(0, 10);
+  // Résultats rangés par pertinence, en alternant les recherches ; les 10 premiers maintenant, les suivants (jusqu'à 24)
+  // plus bas, en course avec les albums, Genius et MusicBrainz : même couverture, sans charger Deezer si c'est trouvé tôt.
+  const ranked = dedupe([0, 1, 2, 3, 4, 5, 6, 7].flatMap((k) => searches.map((r) => data(r)[k]).filter(Boolean))).slice(0, 24);
+  const firstOfEach = ranked.slice(0, 10), rest = ranked.slice(10);
   const det = await Promise.allSettled(firstOfEach.map((t) => getTrack(t.id)));
   const found = det.map((d) => (d.status === 'fulfilled' ? d.value : null)).filter((t) => t && ok(t));
   const pick = found.find(want) || provers[0] || found[0];
@@ -271,9 +274,11 @@ async function findFeat(a, b, songHint, ctx = {}) {
   const deepFor = [[a, topA, fans[0]], [b, topB, fans[1]]]
     .filter(([, t, f]) => data(t).length < SMALL_TOP || (f != null && f < DEEP_FANS)).map(([x]) => x);
   const deepP = tag(deepFor.length ? findFeatDeep(a, b, () => true, deepFor) : Promise.resolve(null), 'albums');
-  const last = await firstHit([deepP, geniusP, mbP], Math.max(1000, FEAT_BUDGET_MS - (Date.now() - started)));
+  const restP = tag(rest.length ? Promise.allSettled(rest.map((t) => getTrack(t.id)))
+    .then((d) => d.map((x) => (x.status === 'fulfilled' ? x.value : null)).find((t) => t && ok(t)) || null) : Promise.resolve(null), 'recherche');
+  const last = await firstHit([restP, deepP, geniusP, mbP], Math.max(1000, FEAT_BUDGET_MS - (Date.now() - started)));
   if (last === TIMEOUT) { stage('temps dépassé'); return null; }
-  if (last && last.st === 'albums') return done(last.v, 'albums');
+  if (last && (last.st === 'albums' || last.st === 'recherche')) return done(last.v, last.st);
   if (last) return credited(last);
   stage('introuvable');
   if (!hint) noFeat.set(pk, Date.now() + NO_FEAT_TTL);
