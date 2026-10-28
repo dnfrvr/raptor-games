@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0c2216">
   <title>Raptor Games</title>
-  <meta name="description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
+  <meta name="description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Raptor Games">
   <meta property="og:title" content="Raptor Games">
-  <meta property="og:description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct sur Deezer.">
+  <meta property="og:description" content="Les jeux rap entre potes : Roland Gamos, blind test, le pont, plus ou moins, la frise. Vérifiés en direct.">
   <meta property="og:image" content="/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -55,7 +55,7 @@
     <header class="logo">
       <img class="raptor logo-raptor" src="/rex.webp" alt="" width="160" height="160" decoding="async">
       <h1><span>Raptor</span><span class="o">Games</span></h1>
-      <p class="pitch" id="pitch">Les jeux rap entre potes, vérifiés en direct sur Deezer.</p>
+      <p class="pitch" id="pitch">Les jeux rap entre potes, vérifiés en direct.</p>
     </header>
 
     <div class="modes" id="modes" role="radiogroup" aria-label="Choix du jeu">
@@ -88,9 +88,9 @@
       <li><span><b>Puis c'est lui qui propose.</b> 3 essais par extrait. Le premier au score fixé gagne.</span></li>
     </ol>
     <ol class="rules" id="rulesBridge" aria-label="Règles du pont" hidden>
-      <li><span><b>Le jeu tire deux rappeurs</b> qui n'ont jamais fait de son ensemble.</span></li>
-      <li><span><b>Chacun son tour, cite un feat</b> avec le dernier artiste, comme au Roland Gamos.</span></li>
-      <li><span><b>Celui qui atteint le rappeur d'arrivée gagne la manche.</b> Sécher ou dépasser le chrono élimine.</span></li>
+      <li><span><b>Le jeu tire deux artistes connus,</b> à 3 ou 4 feats l'un de l'autre.</span></li>
+      <li><span><b>Tout le monde joue en même temps :</b> de feat en feat, relie le départ à l'arrivée.</span></li>
+      <li><span><b>Le moins de feats gagne,</b> puis le plus rapide. En solo, chaque pont raté coûte une vie.</span></li>
     </ol>
     <ol class="rules" id="rulesFans" aria-label="Règles du plus ou moins" hidden>
       <li><span><b>Un artiste s'affiche avec ses fans Deezer.</b></span></li>
@@ -104,10 +104,9 @@
     </ol>
     <ol class="rules" id="rulesFeat" aria-label="Règles">
       <li><span><b>Un artiste est posé.</b> Celui qui commence la manche le choisit.</span></li>
-      <li><span><b>Cite quelqu'un qui a fait un son avec lui.</b> Deezer vérifie le feat en direct.</span></li>
+      <li><span><b>Cite quelqu'un qui a fait un son avec lui.</b> Le jeu vérifie le feat en direct.</span></li>
       <li><span><b>Ton adversaire enchaîne sur ce nouvel artiste.</b> Pas de répétition. Le premier qui sèche perd la manche.</span></li>
     </ol>
-    <p class="version" id="version"></p>
   </main>
 
   <!-- SALON -->
@@ -124,7 +123,6 @@
         <b class="codebox-code" id="bigCode">—</b>
         <span class="codebox-hint">Touche pour copier</span>
       </button>
-      <p class="small" id="inviteUrl">—</p>
       <div class="invite-row">
         <button class="btn" id="shareBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg>Partager</button>
         <button class="btn ghost" id="copyBtn" type="button"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Copier</button>
@@ -221,7 +219,7 @@
   <!-- ARBITRAGE -->
   <div class="overlay" id="judgeOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="judgeText">
     <div class="card">
-      <p class="small">Deezer ne trouve pas ce feat. Il existe vraiment ?</p>
+      <p class="small">Le jeu ne trouve pas ce feat. Il existe vraiment ?</p>
       <p id="judgeText"></p>
       <div class="play-row">
         <button class="btn" id="judgeYes" type="button">Ça compte</button>

@@ -50,10 +50,10 @@
     });
     $('#pitch').textContent = {
       blind: 'Le blind test rap : fais deviner tes sons, trouve ceux des autres.',
-      bridge: 'Relie deux rappeurs par une chaîne de feats, avant les autres.',
+      bridge: 'Relie deux rappeurs en un minimum de feats.',
       fans: 'Qui a le plus de fans sur Deezer ? Une erreur et tu sors.',
       timeline: 'Place chaque son au bon endroit sur la frise des sorties.',
-    }[m] || 'Les jeux rap entre potes, vérifiés en direct sur Deezer.';
+    }[m] || 'Les jeux rap entre potes, vérifiés en direct.';
     const RULES = { feat: 'rulesFeat', blind: 'rulesBlind', bridge: 'rulesBridge', fans: 'rulesFans', timeline: 'rulesTimeline' };
     for (const [k, id] of Object.entries(RULES)) $('#' + id).hidden = k !== m;
   }
@@ -271,7 +271,6 @@
       if (navigator.clipboard) navigator.clipboard.writeText(S.code).then(() => toast('Code copié'), () => toast(S.code));
       else toast(S.code);
     };
-    $('#inviteUrl').textContent = url.replace(/^https?:\/\//, '');
 
     // Une fois l'adversaire arrivé, l'invitation passe au second plan.
     $('#invite').classList.toggle('done', ready);
@@ -281,7 +280,6 @@
     $('#lobbyTitle').textContent = ready ? (N === 2 ? 'Vous êtes deux' : `Vous êtes ${N}`) : isHost ? 'Invite tes potes' : 'En attente';
     $('#shareBtn').hidden = full || !isHost;
     $('#copyBtn').hidden = full || !isHost;
-    $('#inviteUrl').hidden = full || !isHost;
     $('#shareBtn').onclick = async () => {
       if (navigator.share) { try { await navigator.share({ title: 'Raptor Games', text: { blind: 'Viens jouer au blind test contre moi', bridge: 'Viens jouer au Pont contre moi', fans: 'Viens jouer au Plus ou moins contre moi', timeline: 'Viens jouer à la Frise contre moi' }[S.mode] || 'Viens jouer au Roland Gamos contre moi', url }); return; } catch {} }
       copy(url);
@@ -308,7 +306,7 @@
     const race = S.mode === 'bridge';
     const secTxt = (v) => (race ? (v ? `${v / 60} min` : 'Sans limite') : v ? v + ' s' : 'Aucun');
     $('#timerLabel').textContent = race ? 'Temps pour chaque pont' : 'Chrono par tour';
-    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}${race ? ', ponts de 3 ou 4 feats entre artistes connus' : ''}. ${esc(S.players[S.host]?.name || 'L’hôte')} règle la partie.`;
+    $('#settingsSummary').innerHTML = `${blind ? 'Blind test. ' : ''}${S.settings.turnSeconds ? `<b>${secTxt(S.settings.turnSeconds)}</b> ${race ? 'par pont' : 'par tour'}` : '<b>Sans chrono</b>'}, ${t ? `premier à <b>${plural(t, unit)}</b>` : '<b>manches sans limite</b>'}${blind ? ` de <b>${plural(pts, 'point')}</b>` : ''}${race ? ', ponts de 3 ou 4 feats entre artistes connus' : ''}.`;
     document.querySelectorAll('#settings .set').forEach((el) => (el.hidden = !isHost));
     $('#pointsSet').hidden = !isHost || !blind;
     if (isHost && blind) {
@@ -342,7 +340,7 @@
       $('#targetInf').classList.toggle('on', t === 0);
       $('#targetInf').setAttribute('aria-pressed', String(t === 0));
       $('#targetInf').onclick = () => socket.emit('settings', { target: t === 0 ? 3 : 0 });
-      $('#targetHint').textContent = soloAlone ? `Chaque erreur coûte une vie. ${S.mode === 'bridge' ? 'Relie un maximum de ponts' : 'Fais le plus de bonnes réponses'} avant de toutes les perdre.` : blind ? `Le premier à ${plural(t, 'manche')} gagne. Une manche se gagne en premier à ${plural(pts, 'point')} : artiste trouvé +1, titre en plus +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : `Le premier à ${t} manches gagne.`;
+      $('#targetHint').textContent = soloAlone ? `Chaque erreur coûte une vie. ${S.mode === 'bridge' ? 'Relie un maximum de ponts' : 'Fais le plus de bonnes réponses'} avant de toutes les perdre.` : blind ? `Une manche se gagne en premier à ${plural(pts, 'point')} : artiste trouvé +1, titre en plus +1.` : t === 0 ? (S.solo ? 'On enchaîne les manches et tu arrêtes quand tu veux.' : 'On enchaîne les manches et on arrête quand on veut.') : t === 1 ? 'Mort subite : une seule manche.' : '';
     }
 
     $('#startBtn').hidden = !isHost;
@@ -350,7 +348,7 @@
     $('#startBtn').onclick = () => { unlockAudio(); socket.emit('start'); };
     $('#lobbyWait').textContent = !ready
       ? (isHost ? 'Tu pourras lancer dès qu’un autre joueur aura rejoint.' : '')
-      : isHost ? (S.solo || full ? '' : `Jusqu’à ${max} joueurs. Lance quand tout le monde est là.`) : `${S.players[S.host].name} va lancer la partie.`;
+      : isHost ? '' : `${S.players[S.host].name} va lancer la partie.`;
   }
 
   function copy(text) {
@@ -512,20 +510,20 @@
 
     // --- Vue de l'adversaire ---
     $('#watch').hidden = (myTurn && !(bridge && choosing)) || !playing;
-    if (bridge && choosing && playing) $('#watch').innerHTML = r.lastError ? 'Deezer ne répond pas, impossible de tirer un pont. Réessaie la manche suivante.' : '<span class="dots">Préparation du pont</span>';
+    if (bridge && choosing && playing) $('#watch').innerHTML = r.lastError ? 'Impossible de tirer un pont pour l’instant. Réessaie la manche suivante.' : '<span class="dots">Préparation du pont</span>';
     else if (!myTurn && playing) {
-      let txt = `<span class="dots">${choosing ? 'Choix en cours' : 'Recherche en cours'}</span>`;
+      let txt = choosing ? '' : '<span class="dots">Recherche en cours</span>'; // le choix du départ est déjà annoncé au-dessus
       if (r.checking && r.checking.random) txt = `<span class="spin"></span>${esc(turnName)} tire un rappeur au hasard.`;
       else if (r.checking && r.checking.joker) txt = `<span class="spin"></span>${esc(turnName)} utilise un joker 🃏`;
       else if (r.checking && r.checking.verifying) txt = `<span class="spin"></span>On vérifie qu'il reste des feats avec ${esc(r.checking.artist.name)}…`;
-      else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Deezer vérifie.`;
+      else if (r.checking) txt = `<span class="spin"></span>${esc(turnName)} propose <b>${esc(r.checking.artist.name)}</b>${r.checking.song ? `, « ${esc(r.checking.song)} »` : ''}. Vérification…`;
       else if (r.appeal) txt = `${esc(turnName)} te demande de valider un feat.`;
       const triesTxt = r.tries ? ` Essai ${r.tries} sur ${r.maxTries || 3} raté.` : '';
       if (!r.checking && !r.appeal && r.lastError) txt = r.lastError.why === 'used'
         ? `${esc(turnName)} a proposé <b>${esc(r.lastError.artist.name)}</b>, déjà cité.${triesTxt} <span class="dots">Il cherche encore</span>`
         : r.lastError.why === 'random' ? `<span class="dots">${esc(turnName)} choisit l’artiste de départ</span>`
         : r.lastError.why === 'joker' ? `${esc(turnName)} a tenté un joker, sans résultat. <span class="dots">Il cherche encore</span>`
-        : `Deezer ne trouve pas de son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}.${triesTxt} Si ce feat existe, tu peux le valider.`;
+        : `Aucun son trouvé avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(r.lastError.artist.name)}</b>${r.lastError.song ? ` (« ${esc(r.lastError.song)} »)` : ''}.${triesTxt} Si ce feat existe, tu peux le valider.`;
       const grantable = !r.checking && !r.appeal && r.lastError && ['notfound', 'api', 'refused'].includes(r.lastError.why);
       const p = S.players[r.turn];
       // Adversaire parti et plus personne d'autre en ligne : on peut quitter au lieu d'attendre indéfiniment.
@@ -534,6 +532,7 @@
       if (p && !p.online) txt = `${esc(turnName)} s'est déconnecté. La partie reprend dès son retour.`
         + (S.solo ? '' : `<span class="rejoin">Pour revenir : code <b>${esc(S.code)}</b> sur l’accueil.</span>`);
       if (outSet.has(S.me)) txt = `<b>Tu es éliminé de cette manche.</b> ` + txt;
+      if (!txt && !grantable) $('#watch').hidden = true;
       $('#watch').innerHTML = txt + (grantable ? `<button type="button" class="btn small-btn" id="grantBtn">Valider ce feat</button>` : '')
         + (leavable ? `<button type="button" class="btn ghost small-btn" id="quitGameBtn">Quitter la partie</button>` : '');
       if (grantable) armTwoTap($('#grantBtn'), 'Valider ce feat', 'Sûr ?', () => socket.emit('grant'));
@@ -556,7 +555,8 @@
         const badges = (l.rare ? ' <span class="tag rare" title="Feat rare">Rare</span>' : '') + (l.joker ? ' <span class="tag">Joker</span>' : '') + (l.relaunch ? ' <span class="tag">Relance</span>' : '');
         const detail = (i === 0 ? `<span class="by">${l.bridge ? 'départ' : `lancé par ${who}`}</span>` : `<span class="by">${who}</span>`) + badges;
         return `<li class="p${l.by}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${detail}</div>${l.track ? trackCard(l.track, l.byAppeal, others(l.track)) : ''}</li>`;
-      }).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Les feats validés s'affichent ici.</li>`;
+      }).reverse().join('') : '';
+      $('#chainWrap').hidden = !r.chain.length; // pas de liste vide à l'écran
       bindTracks();
       lastChainLen = r.chain.length;
     }
@@ -702,7 +702,7 @@
       const truth = fans ? (next && next.fans != null ? `${esc(next.artist.name)} a <b>${fmtNum(next.fans)}</b> fans.` : '') : (next && next.date ? `Sorti ${next.prec === 'year' ? 'en' : 'le'} <b>${fmtDate(next.date, next.prec)}</b>.` : '');
       banner.innerHTML = res.ok ? `${res.who === S.me ? 'Bien vu' : esc(who) + ' a vu juste'} ! ${truth}` : `${res.value == null ? 'Temps écoulé' : 'Raté'}${res.who === S.me ? '' : ` pour ${esc(who)}`}. ${truth}`;
       banner.className = 'turn ' + (res.ok ? 'me' : 'them');
-    } else if (r.error) banner.innerHTML = `Deezer ne répond pas.${RETRY}`;
+    } else if (r.error) banner.innerHTML = `Impossible de charger la question.${RETRY}`;
     else if (!next) banner.innerHTML = '<span class="spin"></span>Question suivante…';
     else if (fans) banner.innerHTML = myTurn ? `À toi : <b>${esc(next.artist.name)}</b> a-t-il plus ou moins de fans que <b>${esc(prev.artist.name)}</b> ?` : `${esc(turnName)} réfléchit : plus ou moins que ${esc(prev.artist.name)} ?`;
     else banner.innerHTML = myTurn ? 'À toi : <b>où placer ce son</b> sur la frise ?' : `${esc(turnName)} place ce son sur la frise.`;
@@ -720,7 +720,7 @@
         const shown = prev ? `<div class="qz-ref">${avatar(prev.artist, 'sm')}<span><b>${esc(prev.artist.name)}</b><span>${fmtNum(prev.fans)} fans</span></span></div>` : '';
         const choice = res && res.value ? `<p class="small">Réponse : ${res.value === 'more' ? 'plus' : 'moins'} de fans.</p>` : '';
         panel.innerHTML = shown + choice + (can ? `<div class="play-row"><button type="button" class="btn" id="qzMore">Plus ▲</button><button type="button" class="btn ghost" id="qzLess">Moins ▼</button></div>` : '')
-          + `<p class="small qz-streak">Série : ${goodAnswers(Math.max(0, items.length - 1))}</p>`;
+          + (S.solo ? '' : `<p class="small qz-streak">Série : ${goodAnswers(Math.max(0, items.length - 1))}</p>`); // en solo, le score l'affiche déjà
         if (can) { $('#qzMore').onclick = () => socket.emit('qz:answer', { v: 'more' }); $('#qzLess').onclick = () => socket.emit('qz:answer', { v: 'less' }); }
       } else {
         // La frise, du plus ancien au plus récent ; des emplacements « Ici » entre les sons pour le joueur actif.
@@ -732,7 +732,7 @@
           html += `<li class="qz-item">${it.track.cover ? `<img src="${esc(it.track.cover)}" alt="">` : '<span class="nocover"></span>'}<span class="qz-y">${esc(fmtDate(it.date, it.prec))}</span><span class="qz-tt"><b>${esc(it.track.title)}</b><span>${esc(it.track.artist || '')}</span></span></li>`;
         });
         html += slot(items.length) + (mark === items.length ? '<li class="qz-wrong">Placé ici</li>' : '');
-        panel.innerHTML = `<p class="small">${plural(items.length, 'son')} sur la frise, du plus ancien au plus récent.</p><ol class="qz-line">${html}</ol>`;
+        panel.innerHTML = `<p class="small">Du plus ancien au plus récent.</p><ol class="qz-line">${html}</ol>`;
         if (can) panel.querySelectorAll('.qz-here').forEach((b) => (b.onclick = () => socket.emit('qz:answer', { v: Number(b.dataset.k) })));
       }
     }
@@ -831,7 +831,7 @@
       const p = S.players[i] || { name: '—', score: 0, online: false };
       const l = r && r.lanes && r.lanes[i];
       el.querySelector('.pname').textContent = p.name;
-      el.querySelector('.pj').textContent = l && S.phase === 'playing' ? (l.done ? `✓ ${plural(l.links, 'feat')}` : l.gaveUp ? 'abandon' : `${plural(l.links, 'feat')}`) : '';
+      el.querySelector('.pj').textContent = l && S.phase === 'playing' ? (l.done ? `✓ ${plural(l.links, 'feat')}` : l.gaveUp ? 'abandon' : `${plural(Math.max(0, l.links), 'feat')}`) : '';
       el.querySelector('.pscore').textContent = p.score;
       el.classList.toggle('active', i === S.me && S.phase === 'playing');
       el.classList.toggle('off', !p.online);
@@ -874,7 +874,7 @@
     const mineRes = res && res.find((x) => x.i === S.me);
     banner.className = 'turn ' + (playing && !me.done && !me.gaveUp ? 'me' : 'them');
     banner.innerHTML = r.loading ? '<span class="spin"></span>Le jeu cherche deux rappeurs à relier…'
-      : r.error ? `Deezer ne répond pas, impossible de tirer un pont.${RETRY}`
+      : r.error ? `Impossible de tirer un pont pour l’instant.${RETRY}`
       : res ? (mineRes && mineRes.done ? `Pont réussi en ${plural(mineRes.links, 'feat')} (${fmtTime(mineRes.time)}) ! <b>+1</b>` : `Raté.${r.solution ? ` Chemin le plus court : <b>${esc(solPath(r))}</b>.` : ''} Pont suivant…`)
       : me.done ? `${me.auto && mine.length > 2 ? `<b>${esc(mine[mine.length - 2].artist.name)}</b> a un son avec <b>${esc(r.target.name)}</b> : ` : 'A'}${me.auto && mine.length > 2 ? 'a' : ''}rrivé en ${plural(n, 'feat')} (${fmtTime(me.doneAt)}) ! ${N > 1 ? 'Les autres peuvent encore faire plus court…' : ''}`
       : me.gaveUp ? 'Tu as abandonné ce pont. En attente des autres…'
@@ -902,15 +902,15 @@
       if (brGiveKey !== gk) { brGiveKey = gk; armTwoTap($('#giveupBtn'), 'Abandonner', 'Sûr ?', () => socket.emit('giveup')); }
       for (const id of ['#artistInput', '#songInput', '#submitBtn', '#randomBtn', '#giveupBtn']) $(id).disabled = busy;
       const fb = $('#feedback');
-      if (me.arriving) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>${esc(cur.name)} a-t-il déjà un son avec ${esc(r.target.name)} ? Le jeu vérifie sur Deezer…`; }
-      else if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(me.checking.artist.name)}…`; }
+      if (me.arriving) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>${esc(cur.name)} a-t-il déjà un son avec ${esc(r.target.name)} ? Vérification…`; }
+      else if (busy) { fb.hidden = false; fb.className = 'feedback info'; fb.innerHTML = `<span class="spin"></span>Recherche d’un son avec ${esc(cur.name)} et ${esc(me.checking.artist.name)}…`; }
       else if (me.lastError) {
         const e = me.lastError;
         const k = JSON.stringify(e) + mine.length;
         if (k !== brErrKey) { brErrKey = k; const f = $('#playForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); sfx.buzz(); }
         fb.hidden = false; fb.className = 'feedback';
         const addable = e.why === 'notfound' || e.why === 'api';
-        fb.innerHTML = `<p>${e.why === 'used' ? `<b>${esc(e.artist.name)}</b> est déjà dans ton chemin.` : e.why === 'api' ? 'Deezer ne répond pas, réessaie.' : `Deezer ne trouve aucun son avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe (invité non crédité), ajoute-le.`}</p>` + (addable ? ADD_FEAT : '');
+        fb.innerHTML = `<p>${e.why === 'used' ? `<b>${esc(e.artist.name)}</b> est déjà dans ton chemin.` : e.why === 'api' ? 'La vérification n’a pas abouti, réessaie.' : `Aucun son trouvé avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe (invité non crédité), ajoute-le.`}</p>` + (addable ? ADD_FEAT : '');
         if (addable) armAddFeat(fb, e);
       } else fb.hidden = true;
     }
@@ -927,7 +927,8 @@
       if (mine.length > brLen && brLen > 0 && mine.length > 1) sfx.ding();
       brLen = mine.length;
       $('#chainTitle').textContent = mine.length ? `Ton chemin, ${plural(n, 'feat')}` : 'Ton chemin';
-      $('#chain').innerHTML = mine.length ? mine.map((l, i) => `<li class="p${S.me}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${i === 0 ? '<span class="by">départ</span>' : ''}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`).reverse().join('') : `<li class="empty"><img class="raptor mini" src="/rex.webp" alt="">Ton chemin s'affiche ici.</li>`;
+      $('#chain').innerHTML = mine.length ? mine.map((l, i) => `<li class="p${S.me}${i === 0 ? ' origin' : ''}"><div class="a">${esc(l.artist.name)} ${i === 0 ? '<span class="by">départ</span>' : ''}</div>${l.track ? trackCard(l.track, false, []) : ''}</li>`).reverse().join('') : '';
+      $('#chainWrap').hidden = !mine.length;
       bindTracks();
     }
     const rk = res ? `${r.id}` : '';
@@ -1050,7 +1051,7 @@
       : r.step === 'loading' ? '<span class="spin"></span>Chargement de l’extrait…'
       : r.step === 'guess'
         ? (iGuess ? `À toi : <b>quel artiste chante ?</b><span class="bt-fast">Trouve en moins de ${S.fastSeconds} s : +1 joker</span>` : `${esc(gues)} écoute l’extrait choisi par ${esc(nameOf(r.proposer))}.`)
-        : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b> : choisis un artiste.`)
+        : iPropose ? (r.step === 'pick' ? `Choisis le son à faire deviner à <b>${esc(nameOf(r.guesser))}</b>.` : `Fais deviner un son à <b>${esc(nameOf(r.guesser))}</b>.`)
           : `${esc(prop)} choisit un son pour ${esc(nameOf(r.guesser))}.`;
     document.title = !playing ? 'Raptor Games' : (iPropose || iGuess) ? '● À toi | Blind test' : 'Blind test | Raptor Games';
 
@@ -1089,7 +1090,7 @@
         }
         fb.hidden = false; fb.className = 'feedback';
         fb.innerHTML = e.why === 'nopreview'
-          ? `<p>Deezer n’a aucun extrait audio pour <b>${esc(e.artist.name)}</b>. Choisis un autre artiste.</p>`
+          ? `<p>Aucun extrait audio disponible pour <b>${esc(e.artist.name)}</b>. Choisis un autre artiste.</p>`
           : e.why === 'allused'
           ? `<p>Tous les sons de <b>${esc(e.artist.name)}</b> ont déjà été joués. Choisis un autre artiste.</p>`
           : `<p>Ce n’est pas <b>${esc(e.artist.name)}</b>.${left > 0 ? ` Encore ${plural(left, 'essai')}.` : ''}</p>`;
@@ -1237,7 +1238,7 @@
     }
     if (r.checking) {
       fb.hidden = false; fb.className = 'feedback info';
-      fb.innerHTML = `<span class="spin"></span>Deezer cherche un son avec ${esc(cur.name)} et ${esc(r.checking.artist.name)}. Chrono en pause.`;
+      fb.innerHTML = `<span class="spin"></span>Recherche d’un son avec ${esc(cur.name)} et ${esc(r.checking.artist.name)}. Chrono en pause.`;
       return;
     }
     if (r.appeal) {
@@ -1258,11 +1259,11 @@
     fb.hidden = false; fb.className = 'feedback';
     const msg = {
       used: `<b>${esc(e.artist.name)}</b> est déjà dans la chaîne. Trouve quelqu'un d'autre.`,
-      random: 'Le tirage n’a pas marché : Deezer ne répond pas. Réessaie ou tape un artiste.',
+      random: 'Le tirage n’a pas marché. Réessaie ou tape un artiste.',
       joker: `Le joker n’a trouvé aucun rappeur pour ${esc(cur ? cur.name : '')}. Ton joker est conservé.`,
-      notfound: `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande ${esc(oppTo)} de le valider. Sinon, propose quelqu'un d'autre.`,
+      notfound: `Aucun son trouvé avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe, demande ${esc(oppTo)} de le valider. Sinon, propose quelqu'un d'autre.`,
       refused: `<b>${esc(e.artist.name)}</b> a été refusé. Propose un autre artiste.`,
-      api: `Deezer ne répond pas. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
+      api: `La vérification n’a pas abouti. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
     const canAppeal = (e.why === 'notfound' || e.why === 'api') && !S.solo;
     const canAdd = (e.why === 'notfound' || e.why === 'api') && S.solo;
@@ -1271,7 +1272,7 @@
       : left <= 0 ? ''
       : ` Encore ${left} essai${left > 1 ? 's' : ''}.`;
     const body = left <= 0 && e.why === 'notfound'
-      ? `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande ${esc(oppTo)} de valider ce feat, ou sèche.`
+      ? `Aucun son trouvé avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande ${esc(oppTo)} de valider ce feat, ou sèche.`
       : msg + triesMsg;
     const soloBody = canAdd ? body.replace(/ Si le feat existe, demande [^.]*\. Sinon,/, ' Si le feat existe (invité non crédité), ajoute-le. Sinon,').replace(/ ou demande [^.]*de valider\./, '.').replace(/demande [^:]*de valider ce feat, ou sèche\./, 'ajoute ce feat, ou sèche.') : body;
     fb.innerHTML = `<p>${soloBody}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander ${esc(oppTo)}</button>` : '') + (canAdd ? ADD_FEAT : '');
@@ -1698,7 +1699,7 @@
     const close = () => { list.hidden = true; sel = -1; press = null; pending = null; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); };
     const draw = () => {
       if (press) return; // jamais sous le doigt
-      if (!items.length) { list.innerHTML = '<li class="none">Aucun artiste à ce nom sur Deezer</li>'; list.hidden = false; return; }
+      if (!items.length) { list.innerHTML = '<li class="none">Aucun artiste à ce nom</li>'; list.hidden = false; return; }
       const u = used();
       list.innerHTML = items.map((a, i) => `<li role="option" id="ac-${i}" data-i="${i}" aria-selected="${i === sel}" class="${u.has(a.id) ? 'used' : ''}">${a.picture ? `<img src="${esc(a.picture)}" alt="">` : '<span class="ph"></span>'}<span class="nm">${esc(a.name)}</span>${u.has(a.id) ? '<span class="fans">déjà cité</span>' : `<span class="fans">${fmtFans(a.fans)}</span>`}</li>`).join('');
       list.hidden = false;
@@ -1795,7 +1796,7 @@
         const data = await res.json();
         a = data.find((x) => x.name.toLowerCase() === typed.toLowerCase()) || data[0];
       } catch {}
-      if (!a) return toast(`Aucun artiste « ${typed} » sur Deezer`);
+      if (!a) return toast(`Aucun artiste « ${typed} »`);
     }
     $('#acList').hidden = true;
     socket.emit('answer', { artist: a, song: $('#songInput').value.trim() });
@@ -1880,7 +1881,6 @@
   // Si le site a été mis à jour depuis l'ouverture de la page, on recharge pour avoir la nouvelle version.
   const meta = document.querySelector('meta[name="app-version"]');
   const MY_VERSION = meta ? meta.content : null;
-  if (meta) $('#version').textContent = `Version ${MY_VERSION}, mise à jour le ${new Date(meta.dataset.updated).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
   function checkVersion(v) {
     if (!MY_VERSION || !v || v === MY_VERSION) { try { sessionStorage.removeItem('rg_reload'); } catch {} return; }
     // Garde-fou : une seule tentative par minute pour ne jamais boucler.

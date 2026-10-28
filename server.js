@@ -127,7 +127,7 @@ app.get('/api/artists', async (req, res) => {
   try {
     res.json(await deezer.searchArtists(String(req.query.q || '').slice(0, 60), 8));
   } catch (e) {
-    res.status(502).json({ error: 'Deezer indisponible' });
+    res.status(502).json({ error: 'Recherche indisponible' });
   }
 });
 
