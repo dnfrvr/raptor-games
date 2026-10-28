@@ -89,8 +89,11 @@ app.get('/api/admin/check', admin(async (req) => {
   const t0 = Date.now();
   const t = await deezer.verifyFeat(res[0], res[1], { song: String(req.query.title || '').slice(0, 100) });
   const SRC = { joueurs: 'ajouté par les joueurs', musicbrainz: 'MusicBrainz', genius: 'Genius' };
-  return { a: res[0].name, b: res[1].name, found: !!t, title: t ? t.title : null, source: t ? SRC[t.source] || 'Deezer' : null, ms: Date.now() - t0, genius: require('./genius').info() };
+  const pair = `${res[0].name} × ${res[1].name}`;
+  const rec = deezer.featStats().recent.find((x) => x.pair === pair);
+  return { a: res[0].name, b: res[1].name, found: !!t, title: t ? t.title : null, source: t ? SRC[t.source] || 'Deezer' : null, stage: rec ? rec.stage : null, ms: Date.now() - t0, genius: require('./genius').info() };
 }));
+app.get('/api/admin/stats', admin(() => deezer.featStats()));
 app.get('/api/admin/feats', admin(() => ({ feats: community.list(), info: community.info() })));
 app.post('/api/admin/feats', admin((req) => {
   const e = community.add(String(req.body.a || '').trim(), String(req.body.b || '').trim(), String(req.body.title || ''));

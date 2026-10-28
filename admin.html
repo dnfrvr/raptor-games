@@ -36,6 +36,14 @@
     .msg { min-height: 1.4em; color: var(--yellow); margin: 8px 0 0; }
     .err { color: var(--warn); }
     .empty { color: var(--mute); padding: 16px 0; }
+    table.stats { border-collapse: collapse; width: 100%; font-size: 15px; }
+    .stats th, .stats td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .stats th:first-child, .stats td:first-child { text-align: left; }
+    .stats th { color: var(--mute); font-weight: 600; }
+    .stats td.slow { color: var(--warn); font-weight: 700; }
+    .recent { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14px; color: var(--mute); }
+    .recent li { padding: 4px 0; border-bottom: 1px solid #ffffff10; }
+    .recent b { color: var(--paper); }
   </style>
 </head>
 <body>
@@ -54,6 +62,12 @@
       <button data-f="out" class="ghost" style="margin-left:auto">Se déconnecter</button>
     </div>
     <div id="list"></div>
+
+    <h2>Vitesse des vérifications</h2>
+    <p class="sub" id="statsSub" style="margin:0 0 10px"></p>
+    <div style="overflow-x:auto"><table class="stats" id="statsTable"></table></div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--mute)">Dernières vérifications</summary><ul class="recent" id="recent"></ul></details>
+    <button id="statsBtn" class="ghost" style="margin-top:10px">Actualiser</button>
 
     <h2>Tester un feat</h2>
     <div class="row">
@@ -98,6 +112,7 @@
       const data = await api('GET', '/api/admin/feats');
       feats = data.feats;
       $('#login').hidden = true; $('#panel').hidden = false;
+      loadStats();
       try { sessionStorage.setItem('rg_admin', code); } catch {}
       render();
     } catch (e) {
@@ -156,12 +171,23 @@
       await load();
     } catch (e) { say(e.message, true); }
   };
+  const sec = (ms) => (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+  async function loadStats() {
+    try {
+      const st = await api('GET', '/api/admin/stats');
+      $('#statsSub').textContent = st.total ? `${st.total} vérifications depuis le ${new Date(st.since).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} (dernier redémarrage du serveur), ${sec(st.avg)} en moyenne.` : 'Pas encore de vérification depuis le dernier redémarrage du serveur.';
+      $('#statsTable').innerHTML = st.rows.length ? `<tr><th>Trouvé par</th><th>Nb</th><th>Moyenne</th><th>9 sur 10 sous</th><th>Max</th></tr>` + st.rows.map((r) => `<tr><td>${esc(r.stage)}</td><td>${r.n}</td><td${r.avg > 2500 ? ' class="slow"' : ''}>${sec(r.avg)}</td><td${r.p90 > 3500 ? ' class="slow"' : ''}>${sec(r.p90)}</td><td>${sec(r.max)}</td></tr>`).join('') : '';
+      $('#recent').innerHTML = st.recent.map((x) => `<li><b>${esc(x.pair)}</b> · ${x.ok ? 'oui' : 'non'} · ${esc(x.stage)} · ${sec(x.ms)}</li>`).join('');
+    } catch (e) { $('#statsSub').textContent = e.message; }
+  }
+  $('#statsBtn').onclick = loadStats;
   $('#chk').onclick = async () => {
     const m = $('#chkMsg'); m.classList.remove('err'); m.textContent = 'Vérification…';
     try {
       const r = await api('GET', `/api/admin/check?a=${encodeURIComponent($('#chkA').value)}&b=${encodeURIComponent($('#chkB').value)}`);
       const g = r.genius.enabled ? (r.genius.lastError ? ` · Genius : erreur ${r.genius.lastError}` : r.genius.lastOk ? ' · Genius : OK' : '') : ' · Genius : pas de jeton';
-      m.textContent = r.found ? `${r.a} × ${r.b} : oui, « ${r.title} » (source : ${r.source}, ${(r.ms / 1000).toFixed(1)} s)${g}` : `${r.a} × ${r.b} : non trouvé (${(r.ms / 1000).toFixed(1)} s)${g}`;
+      m.textContent = r.found ? `${r.a} × ${r.b} : oui, « ${r.title} » (trouvé par : ${r.stage || r.source}, ${sec(r.ms)})${g}` : `${r.a} × ${r.b} : non trouvé (${r.stage || ''}, ${sec(r.ms)})${g}`;
+      loadStats();
     } catch (e) { m.textContent = e.message; m.classList.add('err'); }
   };
   const enter = () => { code = $('#code').value.trim(); load(); };
