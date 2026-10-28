@@ -261,10 +261,15 @@ class BridgeRoom extends Room {
     l.lastError = null;
     this.broadcast();
     let track = null;
-    try { track = await deezer.findFeat(cur, a, song ? String(song).slice(0, 100) : ''); } catch (e) { l.lastError = { artist: a, why: 'api' }; }
+    const hint = song ? String(song).slice(0, 100) : '';
+    try { track = await deezer.findFeat(cur, a, hint); } catch (e) { l.lastError = { artist: a, song: hint, why: 'api' }; }
     if (this.round !== r || l.done || l.gaveUp || r.results) return;
     l.checking = false;
-    if (!track) { if (!l.lastError) l.lastError = { artist: a, why: 'notfound' }; return this.broadcast(); }
+    if (!track) { if (!l.lastError) l.lastError = { artist: a, song: hint, why: 'notfound' }; return this.broadcast(); }
+    this.link(r, l, a, track);
+  }
+  // Ajoute un maillon à la chaîne du joueur, puis arrivée (directe ou automatique).
+  link(r, l, a, track) {
     l.chain.push({ artist: a, track });
     this.updateLeft(r, l);
     deezer.prepare(a);
@@ -306,6 +311,23 @@ class BridgeRoom extends Room {
     l.left = 0;
     this.emitAll('link', { track, artist: B });
     this.arrive(r, l, true, at);
+  }
+
+  // Feat que Deezer ne connaît pas (invité non crédité) : le joueur l'ajoute avec le titre du son. Il compte pour lui,
+  // il est signalé « ajouté » aux autres à la fin du pont, et devient commun quand un autre joueur l'ajoute aussi.
+  addFeat(token, song) {
+    const ctx = this.lane(token);
+    if (!ctx || ctx.l.checking || ctx.l.arriving) return;
+    const { l, r } = ctx;
+    const e = l.lastError;
+    if (!e || !['notfound', 'api'].includes(e.why) || l.chain.some((x) => same(x.artist, e.artist))) return;
+    const title = String(song || e.song || '').trim().slice(0, 100);
+    if (title.length < 2) return { error: 'Écris le titre du son pour ajouter ce feat.' };
+    const cur = l.chain[l.chain.length - 1].artist;
+    const st = deezer.community.propose(cur, e.artist, title, token);
+    l.lastError = null;
+    l.notice = { text: st.status === 'ok' ? `« ${title} » ajouté : ce feat est maintenant reconnu partout.` : `« ${title} » ajouté à ta partie. Il sera reconnu partout dès qu'un autre joueur l'ajoute aussi.`, id: Date.now() };
+    this.link(r, l, e.artist, { id: null, title, artists: [cur.name, e.artist.name], preview: null, link: null, cover: null, added: true });
   }
 
   // Retirer son dernier maillon (on s'est engagé sur une mauvaise piste).
@@ -403,7 +425,7 @@ class BridgeRoom extends Room {
       paused: !r.deadline, out: [],
       // Ma chaîne (complète) ; celle des autres reste cachée pendant la course (seulement leur avancée).
       chain: mine ? mine.chain : [],
-      me: mine ? { done: mine.done, auto: !!mine.auto, arriving: !!mine.arriving, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, left: mine.chain.length > 1 ? mine.left ?? null : (r.start ? r.pathLen ?? this.left(r, r.start) : null) } : null,
+      me: mine ? { done: mine.done, auto: !!mine.auto, arriving: !!mine.arriving, doneAt: mine.doneAt, gaveUp: mine.gaveUp, checking: mine.checking, lastError: mine.lastError, notice: mine.notice || null, left: mine.chain.length > 1 ? mine.left ?? null : (r.start ? r.pathLen ?? this.left(r, r.start) : null) } : null,
       shortest: r.shortest ?? null,
       pathLen: r.pathLen ?? null,
       level: r.level || null,

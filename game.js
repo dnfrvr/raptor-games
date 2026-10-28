@@ -637,6 +637,30 @@ class Room {
     this.checkKO();
   }
 
+  // Feat validé par un humain (l'adversaire) avec le titre du son : il entre dans la base commune, pour toutes les parties.
+  shareFeat(a, b, song) {
+    const title = String(song || '').trim();
+    if (title.length < 2 || !a || !b) return;
+    deezer.community.confirm(a, b, title, 'adversaire');
+    this.notice = { text: `« ${title} » ajouté à la base : ce feat sera reconnu dans toutes les parties.`, id: Date.now() };
+  }
+
+  // Solo (contre le bot) : Deezer ne trouve pas un feat qu'on sait vrai (invité non crédité) ? On l'ajoute avec le titre
+  // du son : il compte dans cette partie, et devient commun à tous quand un autre joueur l'ajoute aussi.
+  addFeat(token, song) {
+    const i = this.idx(token);
+    const r = this.round;
+    if (!this.solo || this.phase !== 'playing' || !r || i !== r.turn || r.checking || r.appeal || r.ko) return;
+    const e = r.lastError;
+    if (!e || !['notfound', 'api'].includes(e.why) || this.usedArtist(e.artist)) return;
+    const title = String(song || e.song || '').trim().slice(0, 100);
+    if (title.length < 2) return { error: 'Écris le titre du son pour ajouter ce feat.' };
+    const cur = this.current();
+    const st = deezer.community.propose(cur, e.artist, title, token);
+    this.notice = { text: st.status === 'ok' ? `« ${title} » ajouté : ce feat est maintenant reconnu partout.` : `« ${title} » ajouté à ta partie. Il sera reconnu partout dès qu'un autre joueur l'ajoute aussi.`, id: Date.now() };
+    this.accept(e.artist, { id: null, title, artists: [cur.name, e.artist.name], preview: null, link: null, cover: null, added: true }, true);
+  }
+
   // Deezer ne trouve rien ? Le joueur peut demander à l'adversaire de valider à la main.
   appeal(token) {
     const i = this.idx(token);
@@ -656,6 +680,7 @@ class Room {
     if (!r.lastError || !['notfound', 'api', 'refused'].includes(r.lastError.why)) return;
     const { artist, song } = r.lastError;
     if (this.usedArtist(artist)) return;
+    this.shareFeat(this.current(), artist, song);
     this.accept(artist, { id: null, title: song || 'Validé par l’adversaire', artists: [this.current().name, artist.name], preview: null, link: null, cover: null }, true);
   }
 
@@ -666,6 +691,7 @@ class Room {
     const { artist, song } = r.appeal;
     r.appeal = null;
     if (ok) {
+      this.shareFeat(this.current(), artist, song);
       this.accept(artist, { id: null, title: song || 'Validé par l’adversaire', artists: [this.current().name, artist.name], preview: null, link: null, cover: null }, true);
     } else {
       r.lastError = { artist, song, why: 'refused' };
@@ -695,6 +721,7 @@ class Room {
       roundNo: this.roundNo,
       lives: this.lives ?? null,
       lifeLoss: this.lifeLoss || null,
+      notice: this.notice || null,
       players: this.players.map((p) => ({ name: p.name, score: p.score, jokers: p.jokers || 0, online: !!p.bot || p.sockets.size > 0, bot: !!p.bot })),
       round: this.round && {
         ...this.round,

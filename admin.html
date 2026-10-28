@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Admin | Raptor Games</title>
+  <link rel="icon" href="/favicon-32.png">
+  <style>
+    :root { --night: #0c2216; --night-2: #123020; --night-3: #1a4129; --line: #2e6a43; --paper: #f3f7e6; --mute: #a9cdb2; --yellow: #ffd21f; --yellow-edge: #b38f00; --green: #2fae4f; --warn: #ff8a3d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--night); color: var(--paper); font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    h2 { font-size: 18px; margin: 28px 0 10px; }
+    p.sub { color: var(--mute); margin: 0 0 20px; }
+    input { font: inherit; color: var(--paper); background: #07170e; border: 2px solid var(--line); padding: 9px 11px; width: 100%; min-width: 0; }
+    input:focus { outline: none; border-color: var(--yellow); }
+    button { font: inherit; font-weight: 700; cursor: pointer; border: 0; padding: 9px 14px; background: var(--yellow); color: var(--night); box-shadow: 0 3px 0 var(--yellow-edge); white-space: nowrap; }
+    button.ghost { background: var(--night-3); color: var(--paper); box-shadow: 0 3px 0 #07170e; }
+    button.danger { background: #5a1d14; color: #ffd9cf; box-shadow: 0 3px 0 #2c0d09; }
+    button.danger.sure { background: var(--warn); color: var(--night); }
+    button:disabled { opacity: .5; cursor: default; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row > input { flex: 1 1 180px; }
+    .tabs { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
+    .tabs button { background: var(--night-3); color: var(--paper); box-shadow: none; padding: 7px 12px; }
+    .tabs button.on { background: var(--paper); color: var(--night); }
+    .feat { background: var(--night-2); border: 2px solid var(--line); padding: 12px; margin-bottom: 10px; display: grid; gap: 8px; }
+    .feat.pending { border-color: var(--yellow-edge); }
+    .who { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+    .who em { color: var(--yellow); font-style: normal; margin: 0 6px; }
+    .meta { color: var(--mute); font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .badge { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; background: var(--green); color: var(--night); }
+    .badge.pending { background: var(--yellow); }
+    .msg { min-height: 1.4em; color: var(--yellow); margin: 8px 0 0; }
+    .err { color: var(--warn); }
+    .empty { color: var(--mute); padding: 16px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Feats ajoutés par les joueurs</h1>
+  <p class="sub">Les sons que Deezer ne crédite pas. Un feat « proposé » compte seulement dans la partie de celui qui l'a ajouté ; « validé », il est reconnu dans toutes les parties.</p>
+
+  <section id="login">
+    <div class="row"><input id="code" type="password" placeholder="Code admin" autocomplete="current-password"><button id="go">Entrer</button></div>
+    <p class="msg" id="loginMsg"></p>
+  </section>
+
+  <section id="panel" hidden>
+    <div class="tabs" id="tabs">
+      <button data-f="pending" class="on">Proposés</button><button data-f="ok">Validés</button><button data-f="all">Tous</button>
+      <button data-f="out" class="ghost" style="margin-left:auto">Se déconnecter</button>
+    </div>
+    <div id="list"></div>
+
+    <h2>Ajouter un feat</h2>
+    <div class="row">
+      <input id="newA" placeholder="Artiste 1 (ex. Stromae)">
+      <input id="newB" placeholder="Artiste 2 (ex. Orelsan)">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="newT" placeholder="Titre du son (ex. AVF)">
+      <button id="add">Ajouter</button>
+    </div>
+    <p class="msg" id="msg"></p>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let code = '';
+  try { code = sessionStorage.getItem('rg_admin') || ''; } catch {}
+  let filter = 'pending', feats = [];
+
+  async function api(method, url, body) {
+    const res = await fetch(url, { method, headers: { 'x-admin-code': code, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(json.error || 'Erreur ' + res.status), { status: res.status });
+    return json;
+  }
+  const say = (t, bad) => { $('#msg').textContent = t; $('#msg').classList.toggle('err', !!bad); };
+  const fmt = (ts) => ts ? new Date(ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const SRC = { adversaire: 'validé par un adversaire', joueurs: 'ajouté en solo', admin: 'ajouté ici' };
+
+  async function load() {
+    try {
+      const data = await api('GET', '/api/admin/feats');
+      feats = data.feats;
+      $('#login').hidden = true; $('#panel').hidden = false;
+      try { sessionStorage.setItem('rg_admin', code); } catch {}
+      render();
+    } catch (e) {
+      $('#login').hidden = false; $('#panel').hidden = true;
+      $('#loginMsg').textContent = code ? e.message : '';
+      $('#loginMsg').classList.add('err');
+    }
+  }
+
+  function render() {
+    const shown = feats.filter((f) => filter === 'all' || f.status === filter);
+    const n = (st) => feats.filter((f) => f.status === st).length;
+    $('#tabs [data-f="pending"]').textContent = `Proposés (${n('pending')})`;
+    $('#tabs [data-f="ok"]').textContent = `Validés (${n('ok')})`;
+    $('#tabs [data-f="all"]').textContent = `Tous (${feats.length})`;
+    $('#list').innerHTML = shown.length ? shown.map((f) => `
+      <div class="feat ${f.status}" data-k="${esc(f.key)}">
+        <div class="who">${esc(f.a)}<em>×</em>${esc(f.b)}</div>
+        <div class="meta"><span class="badge ${f.status}">${f.status === 'ok' ? 'Validé' : 'Proposé'}</span><span>${esc(SRC[f.src] || f.src || '')}</span>${f.status === 'pending' ? `<span>${f.votes} joueur${f.votes > 1 ? 's' : ''}</span>` : ''}<span>${esc(fmt(f.updatedAt || f.at))}</span></div>
+        <div class="row"><input class="t" value="${esc(f.title)}" aria-label="Titre du son"><button class="ghost save">Corriger</button>
+          ${f.status === 'pending' ? '<button class="ok">Valider</button>' : '<button class="ghost unok">Retirer la validation</button>'}
+          <button class="danger del">Supprimer</button></div>
+      </div>`).join('') : `<p class="empty">${filter === 'pending' ? 'Aucun feat en attente.' : 'Rien ici pour l’instant.'}</p>`;
+  }
+
+  $('#list').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const box = b.closest('.feat'); const key = box.dataset.k;
+    const url = '/api/admin/feats/' + encodeURIComponent(key);
+    try {
+      if (b.classList.contains('del')) {
+        if (!b.classList.contains('sure')) { b.classList.add('sure'); b.textContent = 'Sûr ?'; setTimeout(() => { b.classList.remove('sure'); b.textContent = 'Supprimer'; }, 3000); return; }
+        await api('DELETE', url); say('Feat supprimé.');
+      } else if (b.classList.contains('save')) {
+        await api('PATCH', url, { title: box.querySelector('.t').value }); say('Titre corrigé.');
+      } else if (b.classList.contains('ok')) {
+        await api('PATCH', url, { status: 'ok', title: box.querySelector('.t').value }); say('Feat validé : reconnu dans toutes les parties.');
+      } else if (b.classList.contains('unok')) {
+        await api('PATCH', url, { status: 'pending' }); say('Validation retirée.');
+      }
+      await load();
+    } catch (e) { say(e.message, true); }
+  });
+  $('#tabs').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.f === 'out') { code = ''; try { sessionStorage.removeItem('rg_admin'); } catch {} $('#code').value = ''; $('#loginMsg').textContent = ''; return load(); }
+    filter = b.dataset.f;
+    document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    render();
+  });
+  $('#add').onclick = async () => {
+    try {
+      await api('POST', '/api/admin/feats', { a: $('#newA').value, b: $('#newB').value, title: $('#newT').value });
+      $('#newA').value = $('#newB').value = $('#newT').value = '';
+      say('Feat ajouté et validé.');
+      await load();
+    } catch (e) { say(e.message, true); }
+  };
+  const enter = () => { code = $('#code').value.trim(); load(); };
+  $('#go').onclick = enter;
+  $('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') enter(); });
+  if (code) load();
+})();
+</script>
+</body>
+</html>

@@ -189,6 +189,10 @@ async function findFeat(a, b, songHint) {
   const hint = songHint && songHint.trim();
   const pk = pairKey(a.name, b.name);
 
+  // Feat ajouté par les joueurs (pas crédité chez Deezer) : validé d'office.
+  const added = community.lookup(a, b);
+  if (added) { const t = await communityTrack(added, a, b); return { ...t, rare: false, hinted: !!hint && titleMatches(t, hint) }; }
+
   // 0) Déjà connu (vu dans une autre partie, pendant la préparation, etc.) : aucune recherche.
   //    Mauvaise réponse déjà tentée récemment (sans titre) : refus immédiat.
   const memo = knownFeat(a, b);
@@ -255,6 +259,17 @@ async function findFeat(a, b, songHint) {
   return null;
 }
 
+// Version Deezer d'un son dont on connaît le titre (extrait, pochette) : recherche « titre + artiste ».
+async function trackByTitle(a, b, title) {
+  try {
+    const looks = await Promise.allSettled([a, b].map((x) => get(`/search?q=${encodeURIComponent(`${title} ${x.name}`)}&limit=10`)));
+    const hits = looks.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : []));
+    const t = hits.find((h) => titleMatches(h, title) && h.artist && (matches(h.artist, a) || matches(h.artist, b)));
+    return t ? { ...trackOut(t), artists: [...new Set([...trackOut(t).artists, a.name, b.name])] } : null;
+  } catch (_) { return null; }
+}
+const bareTrack = (a, b, title) => ({ id: null, title, fullTitle: title, preview: null, link: null, cover: null, album: null, artists: [a.name, b.name] });
+
 // Feat confirmé par MusicBrainz : on va chercher le son chez Deezer (extrait, pochette), sinon on garde le titre seul.
 // Le feat est ensuite retenu comme les autres (mémoire sauvegardée) : la prochaine fois, réponse immédiate.
 let mb = null;
@@ -263,21 +278,34 @@ async function mbFeat(a, b, hint) {
   if (!mb) mb = require('./musicbrainz');
   const rec = await mb.findTogether(a.name, b.name, hint, norm).catch(() => null);
   if (!rec) return null;
-  let t = null;
-  try {
-    const looks = await Promise.allSettled([a, b].map((x) => get(`/search?q=${encodeURIComponent(`${rec.title} ${x.name}`)}&limit=10`)));
-    const hits = looks.flatMap((r) => (r.status === 'fulfilled' ? r.value.data || [] : []));
-    t = hits.find((h) => titleMatches(h, rec.title) && h.artist && (matches(h.artist, a) || matches(h.artist, b))) || null;
-  } catch (_) { t = null; }
-  const out = t
-    ? { ...trackOut(t), artists: [...new Set([...trackOut(t).artists, a.name, b.name])] }
-    : { id: null, title: rec.title, fullTitle: rec.title, preview: null, link: null, cover: null, album: null, artists: [a.name, b.name] };
+  const out = (await trackByTitle(a, b, rec.title)) || bareTrack(a, b, rec.title);
   out.source = 'musicbrainz';
   const exp = Date.now() + MEMO_TTL;
-  const k = pairKey(a.name, b.name);
-  if (out.id) { featMemo.set(k, { track: { ...out, at: Date.now() }, exp }); memoDirty++; }
+  if (out.id) { featMemo.set(pairKey(a.name, b.name), { track: { ...out, at: Date.now() }, exp }); memoDirty++; }
   link(a, b, out, exp); link(b, a, out, exp);
   return out;
+}
+
+// ---------- Feats ajoutés par les joueurs (base commune, voir community.js) ----------
+const community = require('./community');
+const FOREVER = 8.64e15;
+// Un feat validé entre dans la mémoire (partenaires connus : utile au bot, au K.O., aux ponts) ; supprimé, il en sort.
+function learnCommunity(e, removed) {
+  const a = { id: e.a.id, name: e.a.name }, b = { id: e.b.id, name: e.b.name };
+  const ka = norm(a.name), kb = norm(b.name);
+  if (removed || e.status !== 'ok') {
+    for (const [x, y] of [[ka, kb], [kb, ka]]) { const m = partnerIdx.get(x); const o = m && m.get(y); if (o && o.track && o.track.source === 'joueurs') m.delete(y); }
+    return;
+  }
+  noFeat.delete(pairKey(a.name, b.name));
+  const t = { ...(e.track || bareTrack(a, b, e.title)), source: 'joueurs' };
+  for (const [x, y] of [[ka, kb], [kb, ka]]) { const m = partnerIdx.get(x); if (m && m.has(y) && m.get(y).track.source === 'joueurs') m.delete(y); }
+  link(a, b, t, FOREVER); link(b, a, t, FOREVER);
+}
+async function communityTrack(e, a, b) {
+  if (e.track === undefined) e.track = await trackByTitle(a, b, e.title); // cherché une fois (null : pas sur Deezer)
+  const t = e.track ? await freshTrack(e.track).catch(() => e.track) : bareTrack(a, b, e.title);
+  return { ...t, title: e.track ? t.title : e.title, source: 'joueurs' };
 }
 
 // Étape 3 : sorties (albums, EP, singles) des deux artistes et apparitions « feat. X ».
@@ -571,7 +599,8 @@ function exportMemory({ maxPairs = 40000, maxNames = 8000, maxPartners = 60 } = 
   for (const [k, m] of [...partnerIdx].slice(-maxNames)) {
     const list = [];
     for (const [pk, o] of [...m].slice(0, maxPartners)) {
-      if (o.exp <= now) continue;
+      // Feats des joueurs : sauvegardés à part (base commune) ; sons sans identifiant Deezer : pas sauvegardés ici.
+      if (o.exp <= now || !o.track || !o.track.id || o.track.source === 'joueurs') continue;
       const a = o.artist.id ? [o.artist.id, o.artist.name, o.artist.picture, o.artist.fans || 0] : [null, o.artist.name];
       list.push([pk, a, ti(o.track), o.exp]);
     }
@@ -660,4 +689,4 @@ async function prepare(a) {
   } catch (_) { /* tâche de fond : jamais bloquant */ }
 }
 
-module.exports = { previewOk, getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };
+module.exports = { learnCommunity, community, previewOk, getTrack, searchArtistTracks, artistTop, trackOut, artistOut, freshTrack, exportMemory, importMemory, memoryStats, withIds, prepare, knownFeat, knownPartners, searchArtists, getArtist, findFeat, findCollaborators, findCollaboratorsDeep, trackArtists, featCredits, proves, norm, setFetcher };

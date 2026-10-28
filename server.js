@@ -15,6 +15,9 @@ if (process.env.DEEZER_MOCK) require('./mock-deezer').install(deezer);
 // Mémoire des feats sauvegardée sur Upstash (si configuré sur Render) : rechargée au démarrage.
 const persist = require('./persist');
 if (!process.env.DEEZER_MOCK) persist.start(deezer);
+// Feats ajoutés par les joueurs (base commune, sauvegardée à part sur Upstash).
+const community = deezer.community;
+community.start(deezer.norm, deezer.learnCommunity);
 
 const app = express();
 // Ancienne adresse : si REDIRECT_TO est défini (ex. https://raptor-games.onrender.com), tout est renvoyé vers la nouvelle,
@@ -57,7 +60,38 @@ const sendIndex = (req, res) => {
   res.type('html').send(html);
 };
 app.get('/', sendIndex);
-app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer) }); });
+app.get('/api/version', (_, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: VERSION, memoire: persist.info(deezer), featsJoueurs: community.info() }); });
+
+// ---------- Admin : feats ajoutés par les joueurs (valider, corriger, supprimer) ----------
+// Protégé par le code ADMIN_CODE (variable d'environnement sur Render). Sans ce code : admin désactivée.
+const ADMIN_CODE = process.env.ADMIN_CODE || '';
+const adminOk = (req) => {
+  const given = Buffer.from(String(req.get('x-admin-code') || ''));
+  const want = Buffer.from(ADMIN_CODE);
+  return ADMIN_CODE.length >= 6 && given.length === want.length && crypto.timingSafeEqual(given, want);
+};
+const admin = (fn) => async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!ADMIN_CODE) return res.status(503).json({ error: 'Admin désactivée : ajoute la variable ADMIN_CODE (6 caractères ou plus) sur Render.' });
+  if (!adminOk(req)) { await new Promise((r) => setTimeout(r, 800)); return res.status(401).json({ error: 'Code incorrect.' }); }
+  try { res.json(await fn(req)); } catch (e) { res.status(400).json({ error: e.message }); }
+};
+app.get('/admin', (_, res) => { res.set('Cache-Control', 'no-store'); res.set('X-Robots-Tag', 'noindex'); res.sendFile(path.join(__dirname, 'admin.html')); });
+app.use('/api/admin', express.json({ limit: '10kb' }));
+app.get('/api/admin/feats', admin(() => ({ feats: community.list(), info: community.info() })));
+app.post('/api/admin/feats', admin((req) => {
+  const e = community.add(String(req.body.a || '').trim(), String(req.body.b || '').trim(), String(req.body.title || ''));
+  if (!e) throw new Error('Il faut deux artistes différents et le titre du son.');
+  return { ok: true };
+}));
+app.patch('/api/admin/feats/:key', admin((req) => {
+  if (!community.update(req.params.key, { title: req.body.title, status: req.body.status })) throw new Error('Feat introuvable.');
+  return { ok: true };
+}));
+app.delete('/api/admin/feats/:key', admin((req) => {
+  if (!community.remove(req.params.key)) throw new Error('Feat introuvable.');
+  return { ok: true };
+}));
 // Service worker : garde le jeu sur le téléphone pour l'ouvrir même quand le serveur dort.
 const SW = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8').replace(/__VERSION__/g, VERSION);
 app.get('/sw.js', (_, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript').send(SW); });
@@ -147,6 +181,12 @@ io.on('connection', (socket) => {
   socket.on('br:undo', act(() => room.undo && room.undo(token)));
   socket.on('bt:refresh', act(() => room.refreshExtract && room.refreshExtract()));
   socket.on('qz:answer', act((d) => room.quizAnswer && room.quizAnswer(token, d.v)));
+  // Feat non crédité chez Deezer : l'ajouter avec le titre du son (solo, et Le pont).
+  socket.on('addFeat', (d) => {
+    if (!room || !token || !room.addFeat) return;
+    const out = room.addFeat(token, String((d && d.song) || '').slice(0, 100));
+    if (out && out.error) fail(out.error); else room.broadcast();
+  });
   socket.on('bt:search', act((d) => room.searchTrack && room.searchTrack(token, d.q)));
   socket.on('leave', () => {
     if (!room || !token) return;

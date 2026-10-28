@@ -201,6 +201,7 @@
 
   // ================= ÉTAT =================
   socket.on('state', (st) => {
+    try { showNotice(st.notice); if (st.round && st.round.me) showNotice(st.round.me.notice); } catch {}
     S = st;
     stateAt = performance.now();
     roomCode = st.code;
@@ -544,7 +545,7 @@
     const jo = $('#judgeOverlay');
     if (judging && jo.hidden) setTimeout(() => $('#judgeYes').focus(), 50);
     jo.hidden = !judging;
-    if (judging) $('#judgeText').innerHTML = `${esc(cur.name)} <em>×</em> ${esc(r.appeal.artist.name)}${r.appeal.song ? `<span class="small">« ${esc(r.appeal.song)} »</span>` : ''}`;
+    if (judging) $('#judgeText').innerHTML = `${esc(cur.name)} <em>×</em> ${esc(r.appeal.artist.name)}${r.appeal.song ? `<span class="small">« ${esc(r.appeal.song)} » · validé, ce feat sera reconnu dans toutes les parties</span>` : ''}`;
 
     // --- Chaîne, la plus récente en haut ---
     if (redraw) {
@@ -618,6 +619,32 @@
     return '';
   };
   let qzKey = '', qzResId = null, qzOutKey = '';
+
+  // Feat non crédité chez Deezer : l'ajouter avec le titre du son (pris dans « Titre du son »).
+  const ADD_FEAT = '<button type="button" class="btn ghost small-btn" data-addfeat>Ajouter ce feat</button>';
+  function armAddFeat(el, e) {
+    const b = el.querySelector('[data-addfeat]');
+    if (!b) return;
+    b.onclick = () => {
+      const typed = ($('#songInput').value || '').trim();
+      const song = typed || e.song || '';
+      if (song.length < 2) {
+        toast('Écris le titre du son dans « Titre du son », puis touche Ajouter ce feat.', 3200);
+        if (!$('#artistInput').value) $('#artistInput').value = e.artist.name;
+        $('#songInput').focus();
+        return;
+      }
+      b.disabled = true;
+      socket.emit('addFeat', { song });
+    };
+  }
+  let noticeId = null;
+  function showNotice(n) {
+    if (!n || n.id === noticeId) return;
+    const first = noticeId === null;
+    noticeId = n.id;
+    if (!first || Date.now() - n.id < 4000) toast(n.text, 4200);
+  }
 
   // Deezer muet : bouton pour relancer le tirage au lieu de rester bloqué.
   const RETRY = '<button type="button" class="btn ghost small-btn retry-btn" data-retry>Réessayer</button>';
@@ -882,7 +909,9 @@
         const k = JSON.stringify(e) + mine.length;
         if (k !== brErrKey) { brErrKey = k; const f = $('#playForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); sfx.buzz(); }
         fb.hidden = false; fb.className = 'feedback';
-        fb.innerHTML = `<p>${e.why === 'used' ? `<b>${esc(e.artist.name)}</b> est déjà dans ton chemin.` : e.why === 'api' ? 'Deezer ne répond pas, réessaie.' : `Deezer ne trouve aucun son avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>.`}</p>`;
+        const addable = e.why === 'notfound' || e.why === 'api';
+        fb.innerHTML = `<p>${e.why === 'used' ? `<b>${esc(e.artist.name)}</b> est déjà dans ton chemin.` : e.why === 'api' ? 'Deezer ne répond pas, réessaie.' : `Deezer ne trouve aucun son avec <b>${esc(cur.name)}</b> et <b>${esc(e.artist.name)}</b>${e.song ? ` sous le titre « ${esc(e.song)} »` : ''}. Si le feat existe (invité non crédité), ajoute-le.`}</p>` + (addable ? ADD_FEAT : '');
+        if (addable) armAddFeat(fb, e);
       } else fb.hidden = true;
     }
 
@@ -931,7 +960,7 @@
     ex.hidden = false; ex.dataset.key = '';
     ex.innerHTML = `<p>Le classement :</p><ul>${res.map((x) => {
       const lane = r.lanes[x.i];
-      const path = lane && lane.chain ? lane.chain.map((c) => c.artist.name).join(' → ') : '';
+      const path = lane && lane.chain ? lane.chain.map((c) => c.artist.name + (c.track && c.track.added ? ' (feat ajouté)' : '')).join(' → ') : '';
       const st = x.done ? `${plural(x.links, 'feat')} en ${fmtTime(x.time)}` : x.gaveUp ? 'abandon' : 'pas arrivé';
       return `<li><div class="ex-txt"><b>${esc(S.players[x.i]?.name || '')} · ${st}</b><span>${esc(path)}</span></div></li>`;
     }).join('')}</ul>`;
@@ -1235,7 +1264,8 @@
       refused: `<b>${esc(e.artist.name)}</b> a été refusé. Propose un autre artiste.`,
       api: `Deezer ne répond pas. Réessaie dans un instant ou demande ${esc(oppTo)} de valider.`,
     }[e.why] || 'Ce feat ne passe pas.';
-    const canAppeal = (e.why === 'notfound' || e.why === 'api') && !(S.solo && S.mode === 'bridge');
+    const canAppeal = (e.why === 'notfound' || e.why === 'api') && !S.solo;
+    const canAdd = (e.why === 'notfound' || e.why === 'api') && S.solo;
     const max = r.maxTries || 3, left = max - (r.tries || 0);
     const triesMsg = e.why === 'api' || e.why === 'random' || e.why === 'joker' ? ''
       : left <= 0 ? ''
@@ -1243,8 +1273,10 @@
     const body = left <= 0 && e.why === 'notfound'
       ? `Deezer ne trouve aucun son avec <b>${esc(cur ? cur.name : '')}</b> et <b>${esc(e.artist.name)}</b>. <b>Plus d'essais</b> : demande ${esc(oppTo)} de valider ce feat, ou sèche.`
       : msg + triesMsg;
-    fb.innerHTML = `<p>${body}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander ${esc(oppTo)}</button>` : '');
+    const soloBody = canAdd ? body.replace(/ Si le feat existe, demande [^.]*\. Sinon,/, ' Si le feat existe (invité non crédité), ajoute-le. Sinon,').replace(/ ou demande [^.]*de valider\./, '.').replace(/demande [^:]*de valider ce feat, ou sèche\./, 'ajoute ce feat, ou sèche.') : body;
+    fb.innerHTML = `<p>${soloBody}</p>` + (canAppeal ? `<button type="button" class="btn ghost small-btn" id="appealBtn">Demander ${esc(oppTo)}</button>` : '') + (canAdd ? ADD_FEAT : '');
     if (canAppeal) $('#appealBtn').onclick = () => socket.emit('appeal');
+    if (canAdd) armAddFeat(fb, e);
   }
 
   // ================= K.O. =================
@@ -1500,7 +1532,7 @@
     // Pochette floutée tant que des artistes du son sont cachés : on pourrait y lire leur nom.
     const cover = t.cover ? `<img src="${esc(t.cover)}" alt=""${hide.length ? ' class="veiled"' : ''}>` : '<span class="nocover" aria-hidden="true"></span>';
     const names = (t.artists || []).map((n) => (hide.includes(n) ? hid(n.length) : esc(n))).join(', ');
-    const sub = byAppeal ? '<span class="badge">Validé à la main</span>' : `<span>${names}</span>`;
+    const sub = byAppeal ? `<span class="badge">${t.added ? 'Feat ajouté' : 'Validé à la main'}</span>` : `<span>${names}</span>`;
     const label = hide.length ? 'Écouter l’extrait' : `Écouter « ${esc(t.title)} »`;
     const btn = t.preview ? `<button type="button" class="play-btn" data-prev="${esc(t.preview)}" aria-label="${label}">${PLAY}</button>` : '';
     // Le lien Deezer montrerait tous les artistes : il n'apparaît qu'une fois la manche finie.
